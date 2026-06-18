@@ -1,4 +1,32 @@
-import { User, Tenant, Ticket } from './types';
+import { User, Tenant, Ticket, IssueTypeCategory } from './types';
+
+export const INITIAL_ISSUE_TYPES: IssueTypeCategory[] = [
+  {
+    id: 'it_defeito',
+    name: 'Defeito',
+    subcategories: ['Riscado', 'Amassado', 'Quebrado', 'Trincado', 'Sem Pintura', 'Mau funcionamento', 'Padrão fora de medida']
+  },
+  {
+    id: 'it_avaria',
+    name: 'Avaria',
+    subcategories: ['Embalagem Danificada', 'Molhado', 'Oxidação / Ferrugem', 'Manchado']
+  },
+  {
+    id: 'it_troca',
+    name: 'Troca',
+    subcategories: ['Desistência do cliente', 'Erro comercial de pedido', 'Garantia estendida']
+  },
+  {
+    id: 'it_logistica',
+    name: 'Erro de Logística',
+    subcategories: ['Quantidade incorreta', 'Produto trocado', 'Atraso na entrega', 'Extravio de volume']
+  },
+  {
+    id: 'it_outro',
+    name: 'Outro',
+    subcategories: ['Reclamação geral', 'Dúvida técnica']
+  }
+];
 
 export const INITIAL_TENANTS: Tenant[] = [
   {

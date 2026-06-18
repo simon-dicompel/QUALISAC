@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { IssueType, TicketDefect, Product } from '../types';
+import { TicketDefect, Product, IssueTypeCategory } from '../types';
 import { X, ClipboardList, Info, HelpCircle, Plus, Trash2 } from 'lucide-react';
 
 interface NewTicketModalProps {
@@ -10,13 +10,14 @@ interface NewTicketModalProps {
     productName: string;
     batch: string;
     clientName: string;
-    issueType: any;
+    issueType: string;
+    subCategory: string;
     quantity: number;
     description: string;
     defects?: TicketDefect[];
   }) => void;
   products: Product[];
-  issueTypes: string[];
+  issueTypes: IssueTypeCategory[];
 }
 
 export const NewTicketModal: React.FC<NewTicketModalProps> = ({
@@ -30,7 +31,10 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   const [customProductName, setCustomProductName] = useState(products[0]?.name || 'Leite Condensado Estrela 395g');
   const [batch, setBatch] = useState('');
   const [clientName, setClientName] = useState('');
-  const [issueType, setIssueType] = useState<string>(issueTypes[0] || 'Defeito');
+  
+  const [issueType, setIssueType] = useState<string>(issueTypes[0]?.name || 'Defeito');
+  const [subCategory, setSubCategory] = useState<string>(issueTypes[0]?.subcategories[0] || '');
+  
   const [quantity, setQuantity] = useState<number>(1);
   const [description, setDescription] = useState('');
   
@@ -53,6 +57,16 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
     }
   };
 
+  const handleCategoryChange = (categoryName: string) => {
+    setIssueType(categoryName);
+    const selected = issueTypes.find((it) => it.name === categoryName);
+    if (selected && selected.subcategories.length > 0) {
+      setSubCategory(selected.subcategories[0]);
+    } else {
+      setSubCategory('');
+    }
+  };
+
   const handleSubmitForm = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -72,6 +86,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
       batch,
       clientName,
       issueType,
+      subCategory,
       quantity,
       description,
       defects: defects.length > 0 ? defects : [
@@ -84,7 +99,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
     setCustomProductName(products[0]?.name || '');
     setBatch('');
     setClientName('');
-    setIssueType(issueTypes[0] || 'Defeito');
+    setIssueType(issueTypes[0]?.name || 'Defeito');
+    setSubCategory(issueTypes[0]?.subcategories[0] || '');
     setQuantity(1);
     setDescription('');
     setDefects([]);
@@ -176,27 +192,46 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Issue type */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Categoria do Desvio */}
             <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Tipo de Desvio *</label>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Categoria (Pai) *</label>
               <select
                 id="modal-issue-type"
                 value={issueType}
-                onChange={(e) => setIssueType(e.target.value)}
+                onChange={(e) => handleCategoryChange(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {issueTypes.map((it) => (
-                  <option key={it} value={it}>
-                    ⚠️ {it}
+                {issueTypes.map((cat) => (
+                  <option key={cat.id} value={cat.name}>
+                    📁 {cat.name}
                   </option>
                 ))}
               </select>
             </div>
 
+            {/* Subcategoria do Desvio */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Subcategoria (Filho) *</label>
+              <select
+                id="modal-sub-category"
+                value={subCategory}
+                onChange={(e) => setSubCategory(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {issueTypes
+                  .find((cat) => cat.name === issueType)
+                  ?.subcategories.map((sub) => (
+                    <option key={sub} value={sub}>
+                      🔹 {sub}
+                    </option>
+                  )) || <option value="">Sem subcategorias</option>}
+              </select>
+            </div>
+
             {/* Quantity */}
             <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Quantidade Afetada (Peças/Unidades) *</label>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Quant. Afetada *</label>
               <input
                 id="modal-quantity"
                 type="number"

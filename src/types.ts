@@ -18,7 +18,13 @@ export interface Tenant {
   color: string;
 }
 
-export type IssueType = 'Avaria' | 'Defeito' | 'Troca' | 'Erro de Logística' | 'Outro';
+export type IssueType = string;
+
+export interface IssueTypeCategory {
+  id: string;
+  name: string;
+  subcategories: string[];
+}
 
 export type TicketStatus = 'Aberto' | 'Em analise' | 'Em tratativa' | 'Resolvido' | 'Finalizado';
 
@@ -75,6 +81,7 @@ export interface Ticket {
   batch: string; // Lote
   clientName: string;
   issueType: IssueType;
+  subCategory?: string;
   quantity: number;
   description: string;
   status: TicketStatus;

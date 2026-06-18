@@ -280,10 +280,17 @@ export const TicketList: React.FC<TicketListProps> = ({
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-xs font-medium text-slate-700 flex items-center gap-1 bg-slate-50 border border-slate-200 py-1 px-2 rounded-lg w-max shadow-2xs">
-                      <Tag className="w-3 h-3 text-slate-400" />
-                      <span>{ticket.issueType}</span>
-                    </span>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-xs font-medium text-slate-700 flex items-center gap-1 bg-slate-50 border border-slate-200 py-1 px-2 rounded-lg w-max shadow-2xs">
+                        <Tag className="w-3 h-3 text-slate-400" />
+                        <span>{ticket.issueType}</span>
+                      </span>
+                      {ticket.subCategory && (
+                        <span className="text-[10px] text-indigo-600 pl-1 font-bold">
+                          ↳ {ticket.subCategory}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {getStatusBadge(ticket.status)}

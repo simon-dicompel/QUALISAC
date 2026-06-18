@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Tenant, Product, UserRole } from '../types';
+import { User, Tenant, Product, UserRole, IssueTypeCategory } from '../types';
 import { 
   Package, 
   Tags, 
@@ -23,9 +23,11 @@ interface AdminConfigViewProps {
   onEditProduct: (code: string, updatedName: string) => void;
   onDeleteProduct: (code: string) => void;
   
-  issueTypes: string[];
+  issueTypes: IssueTypeCategory[];
   onAddIssueType: (type: string) => void;
   onDeleteIssueType: (type: string) => void;
+  onAddSubcategory: (categoryId: string, subCategoryName: string) => void;
+  onDeleteSubcategory: (categoryId: string, subCategoryName: string) => void;
   
   users: User[];
   onAddUser: (user: User) => void;
@@ -43,6 +45,8 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
   issueTypes,
   onAddIssueType,
   onDeleteIssueType,
+  onAddSubcategory,
+  onDeleteSubcategory,
   
   users,
   onAddUser,
@@ -60,6 +64,8 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
 
   // Issue types states
   const [newIssueType, setNewIssueType] = useState('');
+  const [selectedParentId, setSelectedParentId] = useState<string>(issueTypes[0]?.id || '');
+  const [newSubCategory, setNewSubCategory] = useState('');
 
   // User registration states
   const [newUserEmail, setNewUserEmail] = useState('');
@@ -108,13 +114,36 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
       return;
     }
     const cleanType = newIssueType.trim();
-    if (issueTypes.some((it) => it.toLowerCase() === cleanType.toLowerCase())) {
+    if (issueTypes.some((it) => it.name.toLowerCase() === cleanType.toLowerCase())) {
       alert(`Erro: O tipo de desvio "${cleanType}" já está cadastrado.`);
       return;
     }
 
     onAddIssueType(cleanType);
     setNewIssueType('');
+  };
+
+  // Submit Subcategory handler
+  const handleCreateSubcategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    const parentId = selectedParentId || issueTypes[0]?.id;
+    if (!parentId) {
+      alert('Por favor, cadastre primeiro uma categoria pai.');
+      return;
+    }
+    if (!newSubCategory.trim()) {
+      alert('O nome da subcategoria não pode ser vazio.');
+      return;
+    }
+    const cleanSub = newSubCategory.trim();
+    const parentCategory = issueTypes.find(it => it.id === parentId);
+    if (parentCategory && parentCategory.subcategories.some(sub => sub.toLowerCase() === cleanSub.toLowerCase())) {
+      alert(`Erro: A subcategoria "${cleanSub}" já está cadastrada nesta categoria.`);
+      return;
+    }
+
+    onAddSubcategory(parentId, cleanSub);
+    setNewSubCategory('');
   };
 
   // Submit User handler
@@ -379,88 +408,176 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
       {activeSubTab === 'issueTypes' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-150">
           
-          {/* Create Deviation Form Card */}
-          <div className="bg-white p-5 rounded-xl border border-slate-100 card-shadow h-fit space-y-4">
-            <div>
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                <Plus className="w-4 h-4 text-emerald-500" />
-                <span>Cadastrar Tipo de Desvio</span>
-              </h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Adicione categorias corporativas de erros e desvios para catalogação de SAC.
-              </p>
-            </div>
-
-            <form onSubmit={handleCreateIssueType} className="space-y-3.5">
+          {/* Create Deviation Form Cards */}
+          <div className="space-y-6">
+            {/* Form 1: Create Category (Pai) */}
+            <div className="bg-white p-5 rounded-xl border border-slate-100 card-shadow h-fit space-y-4">
               <div>
-                <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">Nome do Desvio / Ocorrência *</label>
-                <input
-                  id="reg-deviation-type"
-                  type="text"
-                  required
-                  placeholder="Ex: Erro de Embalagem, Devolução Comercial"
-                  value={newIssueType}
-                  onChange={(e) => setNewIssueType(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="bg-amber-50 p-3 rounded-lg border border-amber-150 text-[10.5px] leading-relaxed text-amber-800 flex gap-1.5">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500 mt-0.5" />
-                <p>
-                  As novas taxonomias cadastradas estarão disponíveis nas opções de seleção dos formulários de entrada de novos chamados.
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Plus className="w-4 h-4 text-emerald-500" />
+                  <span>Nova Categoria (Pai)</span>
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Adicione categoria principal do desvio/ocorrência.
                 </p>
               </div>
 
-              <button
-                id="reg-deviation-submit"
-                type="submit"
-                className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Salvar Desvio</span>
-              </button>
-            </form>
+              <form onSubmit={handleCreateIssueType} className="space-y-3 border-none p-0">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">Nome da Categoria *</label>
+                  <input
+                    id="reg-deviation-type"
+                    type="text"
+                    required
+                    placeholder="Ex: Qualidade de Processo, Embalagem"
+                    value={newIssueType}
+                    onChange={(e) => setNewIssueType(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="bg-amber-50 p-2.5 rounded-lg border border-amber-150 text-[10.5px] leading-relaxed text-amber-800 flex gap-1.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500 mt-0.5" />
+                  <p>
+                    Novas taxas e parâmetros estarão imediatamente disponíveis nos formulários de criação de chamados.
+                  </p>
+                </div>
+
+                <button
+                  id="reg-deviation-submit"
+                  type="submit"
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-750 text-white font-bold text-xs rounded-lg transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Cadastrar Categoria</span>
+                </button>
+              </form>
+            </div>
+
+            {/* Form 2: Create Subcategory (Filho) */}
+            <div className="bg-white p-5 rounded-xl border border-slate-100 card-shadow h-fit space-y-4">
+              <div>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Plus className="w-4 h-4 text-indigo-500" />
+                  <span>Nova Subcategoria (Filho)</span>
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Vincule um desvio filho (ex: Riscado) a uma categoria principal (ex: Defeito).
+                </p>
+              </div>
+
+              <form onSubmit={handleCreateSubcategory} className="space-y-3 border-none p-0">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">Categoria Vinculada (Pai) *</label>
+                  <select
+                    value={selectedParentId}
+                    onChange={(e) => setSelectedParentId(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Selecione uma Categoria...</option>
+                    {issueTypes.map((it) => (
+                      <option key={it.id} value={it.id}>
+                        {it.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">Nome da Subcategoria *</label>
+                  <input
+                    id="reg-deviation-sub"
+                    type="text"
+                    required
+                    placeholder="Ex: Riscado, Amassado, Quebrado"
+                    value={newSubCategory}
+                    onChange={(e) => setNewSubCategory(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <button
+                  id="reg-subcategory-submit"
+                  type="submit"
+                  className="w-full py-2 bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Cadastrar Subcategoria</span>
+                </button>
+              </form>
+            </div>
           </div>
 
-          {/* List of current Deviation categories */}
+          {/* List of current Deviation categories and subcategories */}
           <div className="bg-white p-5 rounded-xl border border-slate-100 card-shadow lg:col-span-2 space-y-4">
             <div>
               <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                 <Tags className="w-4 h-4 text-blue-500" />
-                <span>Tipos de Desvio Operando no Sistema</span>
+                <span>Estrutura de Desvios (Pai e Filho)</span>
               </h3>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                Categorias parametrizadas usadas para classificação estatística de qualidade.
+                Categorias e subcategorias parametrizadas para classificação de não-conformidade.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {issueTypes.map((type) => (
+            <div className="space-y-4 max-h-[80vh] overflow-y-auto">
+              {issueTypes.map((cat) => (
                 <div 
-                  key={type} 
-                  className="p-3 bg-slate-50 rounded-xl border border-slate-150 flex items-center justify-between text-xs"
+                  key={cat.id} 
+                  className="p-4 bg-slate-50 rounded-xl border border-slate-150 space-y-3"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>
-                    <strong className="text-slate-750 font-bold">{type}</strong>
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 bg-blue-550 rounded-full"></span>
+                      <strong className="text-slate-800 text-xs font-black uppercase tracking-wider">{cat.name}</strong>
+                      <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-bold">
+                        {cat.subcategories.length} subcategorias
+                      </span>
+                    </div>
+                    
+                    <button
+                      onClick={() => {
+                        if (['it_defeito', 'it_avaria', 'it_troca', 'it_logistica', 'it_outro'].includes(cat.id)) {
+                          alert('Por motivos de conformidade histórica dos relatórios, as categorias nativas não podem ser removidas do sistema.');
+                          return;
+                        }
+                        if (confirm(`Remover a categoria de desvio "${cat.name}" e todas as suas subcategorias do sistema? Chamados existentes não serão apagados.`)) {
+                          onDeleteIssueType(cat.id);
+                        }
+                      }}
+                      className="p-1 hover:bg-rose-100 hover:text-rose-600 rounded text-slate-400 transition-colors cursor-pointer"
+                      title={['it_defeito', 'it_avaria', 'it_troca', 'it_logistica', 'it_outro'].includes(cat.id) ? 'Protegido de remoção' : 'Apagar categoria'}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  
-                  <button
-                    onClick={() => {
-                      if (['Defeito', 'Avaria', 'Troca', 'Erro de Logística'].includes(type)) {
-                        alert('Por motivos de conformidade histórica dos relatórios, as categorias nativas não podem ser removidas do sistema.');
-                        return;
-                      }
-                      if (confirm(`Remover a categoria de desvio "${type}" do sistema? Chamados existentes não serão apagados, mas novos posts não poderão usar tal classificação.`)) {
-                        onDeleteIssueType(type);
-                      }
-                    }}
-                    className="p-1 hover:bg-rose-100 hover:text-rose-600 rounded text-slate-400 transition-colors cursor-pointer"
-                    title={['Defeito', 'Avaria', 'Troca', 'Erro de Logística'].includes(type) ? 'Protegido de remoção' : 'Apagar tipo de desvio'}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+
+                  {cat.subcategories.length === 0 ? (
+                    <p className="text-[11px] text-slate-450 italic pl-4">Nenhuma subcategoria vinculada ainda.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2 pl-4">
+                      {cat.subcategories.map((sub) => (
+                        <div 
+                          key={sub}
+                          className="flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 hover:border-rose-250 rounded-lg text-[11px] text-slate-700 transition-all group"
+                        >
+                          <span className="text-slate-450">▪</span>
+                          <span className="font-semibold text-slate-750">{sub}</span>
+                          <button
+                            onClick={() => {
+                              if (confirm(`Remover a subcategoria "${sub}" da categoria "${cat.name}"?`)) {
+                                onDeleteSubcategory(cat.id, sub);
+                              }
+                            }}
+                            className="ml-1 text-slate-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                            title="Excluir subcategoria"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

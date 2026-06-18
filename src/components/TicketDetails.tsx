@@ -275,7 +275,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
               <div className="space-y-1">
                 <p className="text-slate-600"><span className="font-bold">Lote Rastreável (Batch):</span> {ticket.batch}</p>
                 <p className="text-slate-600"><span className="font-bold">Qtd Afetada / Devolvida:</span> {ticket.quantity} unidades</p>
-                <p className="text-slate-600"><span className="font-bold">Classificação da Ocorrência:</span> {ticket.issueType}</p>
+                <p className="text-slate-600"><span className="font-bold">Classificação da Ocorrência:</span> {ticket.issueType}{ticket.subCategory ? ` - ${ticket.subCategory}` : ''}</p>
               </div>
             </div>
           </div>
@@ -664,7 +664,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 <div>
                   <label className="text-[11px] font-bold text-slate-400 uppercase">Tipo de Ocorrência</label>
                   <p className="text-sm font-semibold mt-0.5 text-rose-700 bg-rose-50 border border-rose-100 rounded px-2 py-0.5 w-max">
-                    {ticket.issueType}
+                    {ticket.issueType}{ticket.subCategory ? ` - ${ticket.subCategory}` : ''}
                   </p>
                 </div>
                 <div>

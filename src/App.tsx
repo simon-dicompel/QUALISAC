@@ -10,9 +10,10 @@ import {
   HistoryStep,
   TicketFile,
   SystemEmailLog,
-  Product
+  Product,
+  IssueTypeCategory
 } from './types';
-import { INITIAL_USERS, INITIAL_TENANTS, INITIAL_TICKETS } from './initialData';
+import { INITIAL_USERS, INITIAL_TENANTS, INITIAL_TICKETS, INITIAL_ISSUE_TYPES } from './initialData';
 import { SaasTenantSelector } from './components/SaaSTenantSelector';
 import { DashboardView } from './components/DashboardView';
 import { TicketList } from './components/TicketList';
@@ -111,9 +112,18 @@ export default function App() {
     ];
   });
 
-  const [issueTypes, setIssueTypes] = useState<string[]>(() => {
+  const [issueTypes, setIssueTypes] = useState<IssueTypeCategory[]>(() => {
     const saved = localStorage.getItem('q_issueTypes');
-    return saved ? JSON.parse(saved) : ['Defeito', 'Avaria', 'Troca', 'Erro de Logística', 'Outro'];
+    if (!saved) return INITIAL_ISSUE_TYPES;
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed.length > 0 && typeof parsed[0] === 'string') {
+        return INITIAL_ISSUE_TYPES;
+      }
+      return parsed;
+    } catch {
+      return INITIAL_ISSUE_TYPES;
+    }
   });
 
   // Sidebar navigation router State
@@ -243,6 +253,7 @@ export default function App() {
     batch: string;
     clientName: string;
     issueType: IssueType;
+    subCategory?: string;
     quantity: number;
     description: string;
     defects?: { id: string; description: string; quantity: number }[];
@@ -262,7 +273,7 @@ export default function App() {
       userId: currentUser.id,
       userName: currentUser.name,
       userRole: currentUser.role,
-      details: `SAC registrou devolução de ${data.quantity} unidades de ${data.productName} por motivo de ${data.issueType}. Lote: ${data.batch}`,
+      details: `SAC registrou devolução de ${data.quantity} unidades de ${data.productName} por motivo de ${data.issueType}${data.subCategory ? ` (${data.subCategory})` : ''}. Lote: ${data.batch}`,
       timestamp,
     };
 
@@ -274,6 +285,7 @@ export default function App() {
       batch: data.batch,
       clientName: data.clientName,
       issueType: data.issueType,
+      subCategory: data.subCategory,
       quantity: data.quantity,
       description: data.description,
       status: 'Aberto',
@@ -518,12 +530,39 @@ export default function App() {
   };
 
   // G. Issue Type mutation handlers (Admin only)
-  const handleAddIssueType = (type: string) => {
-    setIssueTypes((prev) => [...prev, type]);
+  const handleAddIssueType = (categoryName: string) => {
+    setIssueTypes((prev) => [
+      ...prev,
+      {
+        id: `it_${Date.now()}`,
+        name: categoryName,
+        subcategories: []
+      }
+    ]);
   };
 
-  const handleDeleteIssueType = (type: string) => {
-    setIssueTypes((prev) => prev.filter((it) => it !== type));
+  const handleDeleteIssueType = (categoryId: string) => {
+    setIssueTypes((prev) => prev.filter((it) => it.id !== categoryId));
+  };
+
+  const handleAddSubcategory = (categoryId: string, subCategoryName: string) => {
+    setIssueTypes((prev) =>
+      prev.map((it) =>
+        it.id === categoryId
+          ? { ...it, subcategories: [...new Set([...it.subcategories, subCategoryName])] }
+          : it
+      )
+    );
+  };
+
+  const handleDeleteSubcategory = (categoryId: string, subCategoryName: string) => {
+    setIssueTypes((prev) =>
+      prev.map((it) =>
+        it.id === categoryId
+          ? { ...it, subcategories: it.subcategories.filter((s) => s !== subCategoryName) }
+          : it
+      )
+    );
   };
 
   // H. User mutation handlers (Admin only)
@@ -1090,6 +1129,8 @@ export default function App() {
                     issueTypes={issueTypes}
                     onAddIssueType={handleAddIssueType}
                     onDeleteIssueType={handleDeleteIssueType}
+                    onAddSubcategory={handleAddSubcategory}
+                    onDeleteSubcategory={handleDeleteSubcategory}
                     users={users}
                     onAddUser={handleAddUser}
                     onDeleteUser={handleDeleteUser}
