@@ -835,9 +835,6 @@ export default function App() {
           <p className="mt-2 text-sm text-slate-400">
             Sistema Integrado de Devoluções e Tratamento de Não Conformidades
           </p>
-          <div className="mt-1.5 inline-block text-[11px] bg-slate-800 text-slate-300 font-bold uppercase py-0.5 px-2 rounded-full border border-slate-700">
-            Inspirado no Estilo GLPI
-          </div>
         </div>
 
         <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
@@ -1141,16 +1138,6 @@ export default function App() {
               <span className="bg-blue-900 text-blue-200 px-1.5 py-0.2 rounded font-mono text-[9px]">
                 {systemEmailLogs.length} un
               </span>
-            </button>
-
-            <button
-              id="reset-db-btn"
-              onClick={handleResetAppDatabase}
-              className="w-full inline-flex items-center justify-center gap-1 px-3 py-2 text-[10px] font-bold text-slate-400 bg-slate-950 hover:bg-red-950 hover:text-white rounded-lg border border-slate-800 hover:border-red-900 transition-all cursor-pointer uppercase"
-              title="Limpar localStorage para valores originais"
-            >
-              <FolderSync className="w-3.5 h-3.5" />
-              <span>Resetar Banco Local</span>
             </button>
 
             <button
