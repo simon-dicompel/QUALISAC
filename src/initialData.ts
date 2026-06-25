@@ -1,4 +1,4 @@
-import { User, Tenant, Ticket, IssueTypeCategory } from './types';
+import { User, Tenant, Ticket, IssueTypeCategory, Product } from './types';
 
 export const INITIAL_ISSUE_TYPES: IssueTypeCategory[] = [
   {
@@ -477,3 +477,12 @@ export const INITIAL_TICKETS: Ticket[] = [
     ]
   }
 ];
+
+export const INITIAL_PRODUCTS: Product[] = [
+  { code: 'PROD-A310', name: 'Leite Condensado Estrela 395g', producedQty: 50000 },
+  { code: 'PROD-B550', name: 'Biscoito Amanteigado Ninho 150g', producedQty: 30000 },
+  { code: 'PROD-A102', name: 'Molho de Tomate Premium Sachê 340g', producedQty: 100000 },
+  { code: 'PROD-C991', name: 'Suco de Uva Integral Orgânico 1L', producedQty: 15000 },
+  { code: 'PROD-M88', name: 'Chapa Metálica Galvanizada 2mm', producedQty: 2500 }
+];
+

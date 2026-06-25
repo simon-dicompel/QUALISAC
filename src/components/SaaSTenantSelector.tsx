@@ -1,6 +1,7 @@
 import React from 'react';
 import { Tenant, User } from '../types';
 import { Building2, CreditCard, Sparkles, AlertCircle, RefreshCw } from 'lucide-react';
+import { SimonDicompelLogo } from './SimonDicompelLogo';
 
 interface SaasTenantSelectorProps {
   tenants: Tenant[];
@@ -27,9 +28,8 @@ export const SaasTenantSelector: React.FC<SaasTenantSelectorProps> = ({
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         {/* Left Side: SaaS Multi-tenant switcher */}
         <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2 bg-slate-800 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 text-sm">
-            <Building2 className="w-4 h-4 text-sky-400" />
-            <span className="font-semibold text-xs uppercase tracking-wider">SaaS Multitenant:</span>
+          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-700 text-sm shadow-inner shrink-0">
+            <SimonDicompelLogo height={22} />
           </div>
           
           <div className="relative">

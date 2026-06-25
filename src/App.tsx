@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   User, 
   Tenant, 
@@ -11,10 +11,12 @@ import {
   TicketFile,
   SystemEmailLog,
   Product,
-  IssueTypeCategory
+  IssueTypeCategory,
+  TicketReminder
 } from './types';
-import { INITIAL_USERS, INITIAL_TENANTS, INITIAL_TICKETS, INITIAL_ISSUE_TYPES } from './initialData';
+import { INITIAL_USERS, INITIAL_TENANTS, INITIAL_TICKETS, INITIAL_ISSUE_TYPES, INITIAL_PRODUCTS } from './initialData';
 import { SaasTenantSelector } from './components/SaaSTenantSelector';
+import { SimonDicompelLogo } from './components/SimonDicompelLogo';
 import { DashboardView } from './components/DashboardView';
 import { TicketList } from './components/TicketList';
 import { TicketDetails } from './components/TicketDetails';
@@ -44,56 +46,101 @@ import {
   Trash2,
   Bell,
   Send,
-  Settings
+  Settings,
+  Search,
+  Plus,
+  X
 } from 'lucide-react';
 
 export default function App() {
+  // Prerecorded clean defaults for testing
+  const DEFAULT_TEST_TENANT: Tenant = {
+    id: 'tenant_test_1',
+    name: 'Minha Empresa de Teste',
+    plan: 'Enterprise',
+    status: 'Ativo',
+    createdAt: new Date().toISOString(),
+    color: '#6366f1',
+  };
+
+  const DEFAULT_TEST_USER: User = {
+    id: 'user_admin_test',
+    name: 'Administrador de Teste',
+    email: 'admin@dicompel.com.br',
+    role: 'ADMIN',
+    passwordHash: 'Dicompel!@#2026',
+    tenantId: 'tenant_test_1',
+  };
+
+  // Run on mount to clear previous mock data of initialData and start from clean State
+  React.useEffect(() => {
+    const isWiped = localStorage.getItem('q_test_wiped_v10');
+    if (!isWiped) {
+      localStorage.clear();
+      localStorage.setItem('q_tickets', JSON.stringify([]));
+      localStorage.setItem('q_products', JSON.stringify(INITIAL_PRODUCTS));
+      localStorage.setItem('q_tenants', JSON.stringify([DEFAULT_TEST_TENANT]));
+      localStorage.setItem('q_users', JSON.stringify([DEFAULT_TEST_USER]));
+      localStorage.setItem('q_activeTenant', JSON.stringify(DEFAULT_TEST_TENANT));
+      localStorage.setItem('q_currentUser', JSON.stringify(DEFAULT_TEST_USER));
+      localStorage.setItem('q_systemEmailLogs', JSON.stringify([]));
+      localStorage.setItem('q_test_wiped_v10', 'true');
+
+      // Refresh state
+      setTickets([]);
+      setProducts(INITIAL_PRODUCTS);
+      setTenants([DEFAULT_TEST_TENANT]);
+      setUsers([DEFAULT_TEST_USER]);
+      setActiveTenant(DEFAULT_TEST_TENANT);
+      setCurrentUser(DEFAULT_TEST_USER);
+      setSystemEmailLogs([]);
+      setSelectedTicketId(null);
+      setActiveMenu('chamados');
+    }
+
+    // Dynamic clean state requested by the user to start simulation with 0 tickets and 0 products
+    const isSimulationWiped = localStorage.getItem('q_test_wiped_simulation_v1');
+    if (!isSimulationWiped) {
+      localStorage.setItem('q_tickets', JSON.stringify([]));
+      localStorage.setItem('q_products', JSON.stringify([]));
+      localStorage.setItem('q_systemEmailLogs', JSON.stringify([]));
+      localStorage.setItem('q_test_wiped_simulation_v1', 'true');
+
+      // Refresh state
+      setTickets([]);
+      setProducts([]);
+      setSystemEmailLogs([]);
+      setSelectedTicketId(null);
+      setActiveMenu('chamados');
+    }
+  }, []);
+
   // --- 1. Persistent Database Engine (LocalStorage powered) ---
   const [tenants, setTenants] = useState<Tenant[]>(() => {
     const saved = localStorage.getItem('q_tenants');
-    return saved ? JSON.parse(saved) : INITIAL_TENANTS;
+    return saved ? JSON.parse(saved) : [DEFAULT_TEST_TENANT];
   });
 
   const [users, setUsers] = useState<User[]>(() => {
     const saved = localStorage.getItem('q_users');
-    const loadedUsers: User[] = saved ? JSON.parse(saved) : INITIAL_USERS;
-    const hasAdmin = loadedUsers.some((u) => u.email === 'admin@dicompel.com.br');
-    if (!hasAdmin) {
-      const dicompelAdmin: User = {
-        id: 'user_dicompel_admin',
-        name: 'Administrador Dicompel',
-        email: 'admin@dicompel.com.br',
-        role: 'ADMIN',
-        passwordHash: 'Dicompel!@#2026',
-        tenantId: 'tenant_1',
-      };
-      return [dicompelAdmin, ...loadedUsers];
-    }
-    // Also, let's make sure the password matches the request in case the user previously joined or needs an update
-    return loadedUsers.map(u => {
-      if (u.email === 'admin@dicompel.com.br' && u.passwordHash !== 'Dicompel!@#2026') {
-        return { ...u, passwordHash: 'Dicompel!@#2026', role: 'ADMIN' };
-      }
-      return u;
-    });
+    return saved ? JSON.parse(saved) : [DEFAULT_TEST_USER];
   });
 
   const [tickets, setTickets] = useState<Ticket[]>(() => {
     const saved = localStorage.getItem('q_tickets');
-    return saved ? JSON.parse(saved) : INITIAL_TICKETS;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('q_currentUser');
     if (saved) return JSON.parse(saved);
-    // Auto-login default admin for rapid preview testing, or null
-    return INITIAL_USERS[2]; // Marcos Oliveira (Qualidade) by default so they see full powers!
+    return DEFAULT_TEST_USER;
   });
 
   const [activeTenant, setActiveTenant] = useState<Tenant>(() => {
     const savedT = localStorage.getItem('q_activeTenant');
     if (savedT) return JSON.parse(savedT);
-    return INITIAL_TENANTS[0]; // Alimentos Estrela
+    return DEFAULT_TEST_TENANT;
   });
 
   const [systemEmailLogs, setSystemEmailLogs] = useState<SystemEmailLog[]>(() => {
@@ -103,13 +150,7 @@ export default function App() {
 
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem('q_products');
-    return saved ? JSON.parse(saved) : [
-      { code: 'PROD-A310', name: 'Leite Condensado Estrela 395g' },
-      { code: 'PROD-B550', name: 'Biscoito Amanteigado Ninho 150g' },
-      { code: 'PROD-A102', name: 'Molho de Tomate Premium Sachê 340g' },
-      { code: 'PROD-C991', name: 'Suco de Uva Integral Orgânico 1L' },
-      { code: 'PROD-M88', name: 'Chapa Metálica Galvanizada 2mm' },
-    ];
+    return saved !== null ? JSON.parse(saved) : INITIAL_PRODUCTS;
   });
 
   const [issueTypes, setIssueTypes] = useState<IssueTypeCategory[]>(() => {
@@ -128,6 +169,12 @@ export default function App() {
 
   // Sidebar navigation router State
   const [activeMenu, setActiveMenu] = useState<'dashboard' | 'chamados' | 'saas' | 'normas' | 'admin-config'>('chamados');
+  
+  // Global search input state (filters tickets in real-time)
+  const [globalSearchTerm, setGlobalSearchTerm] = useState('');
+
+  // Global ticket status filter state linked with Dashboard clicks
+  const [dashboardStatusFilter, setDashboardStatusFilter] = useState<string>('all');
   
   // Selected single ticket state for detailed work area
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -163,6 +210,63 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('q_tickets', JSON.stringify(tickets));
   }, [tickets]);
+
+  // Ref para rastrear as IDs de chamados que já foram "vistas" nesta sessão para não disparar notificações retroativas no primeiro carregamento
+  const seenTicketIdsRef = useRef<Set<string>>(new Set<string>());
+
+  // Solicita permissão para notificações do navegador na inicialização
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Monitoramento de novos chamados via API de notificações do navegador
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // Se o conjunto de vistos estiver vazio, preenche com as IDs dos chamados existentes e sai
+    if (seenTicketIdsRef.current.size === 0) {
+      tickets.forEach((ticket) => seenTicketIdsRef.current.add(ticket.id));
+      return;
+    }
+
+    // Filtra apenas chamados que NUNCA foram processados nesta sessão
+    const newTickets = tickets.filter((ticket) => !seenTicketIdsRef.current.has(ticket.id));
+
+    newTickets.forEach((ticket) => {
+      // Registrar no conjunto para não disparar novamente
+      seenTicketIdsRef.current.add(ticket.id);
+
+      // Dispara a notificação de navegador apenas se pertencer ao Tenant específico do usuário logado
+      if (ticket.tenantId === currentUser.tenantId) {
+        if ('Notification' in window) {
+          if (Notification.permission === 'granted') {
+            try {
+              new Notification(`Novo Chamado - ${ticket.id}`, {
+                body: `Produto: ${ticket.productName}\nMotivo: ${ticket.issueType}${ticket.subCategory ? ` (${ticket.subCategory})` : ''}\nQuantidade: ${ticket.quantity} un.`,
+                icon: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=128',
+              });
+            } catch (e) {
+              console.warn('Erro ao disparar notificação: ', e);
+            }
+          } else if (Notification.permission !== 'denied') {
+            Notification.requestPermission().then((permission) => {
+              if (permission === 'granted') {
+                try {
+                  new Notification(`Novo Chamado - ${ticket.id}`, {
+                    body: `Produto: ${ticket.productName}\nMotivo: ${ticket.issueType}${ticket.subCategory ? ` (${ticket.subCategory})` : ''}`,
+                  });
+                } catch (e) {
+                  console.warn('Erro ao disparar notificação pós-permissão: ', e);
+                }
+              }
+            });
+          }
+        }
+      }
+    });
+  }, [tickets, currentUser]);
 
   useEffect(() => {
     if (currentUser) {
@@ -382,7 +486,38 @@ export default function App() {
     );
   };
 
-  // E. Add Comment (Chat)
+  // E. Update Ticket Reminders / Subtasks
+  const handleUpdateReminders = (ticketId: string, reminders: TicketReminder[]) => {
+    if (!currentUser) return;
+
+    setTickets((prev) =>
+      prev.map((t) => {
+        if (t.id === ticketId) {
+          const timestamp = new Date().toISOString();
+          const newHist: HistoryStep = {
+            id: `h_${Date.now()}_reminders`,
+            ticketId,
+            action: 'Lembretes Atualizados',
+            userId: currentUser.id,
+            userName: currentUser.name,
+            userRole: currentUser.role,
+            details: `Remessas/Lembretes e tarefas atualizados. Total: ${reminders.length}`,
+            timestamp,
+          };
+
+          return {
+            ...t,
+            reminders,
+            updatedAt: timestamp,
+            history: [...t.history, newHist],
+          };
+        }
+        return t;
+      })
+    );
+  };
+
+  // F. Add Comment (Chat)
   const handleAddComment = (ticketId: string, text: string) => {
     if (!currentUser) return;
 
@@ -508,10 +643,8 @@ export default function App() {
       alert('Permissão Negada: Apenas administradores podem apagar chamados (deletar do sistema).');
       return;
     }
-    if (confirm(`Atenção: Tem certeza absoluta de que deseja apagar permanentemente o chamado "${ticketId}"? Esta ação removerá permanentemente o chamado, histórico e anexos do sistema. Estão em conformidade com as diretivas do ISO 9001.`)) {
-      setTickets((prev) => prev.filter((t) => t.id !== ticketId));
-      setSelectedTicketId(null);
-    }
+    setTickets((prev) => prev.filter((t) => t.id !== ticketId));
+    setSelectedTicketId(null);
   };
 
   // F. Product mutation handlers (Admin only)
@@ -519,9 +652,9 @@ export default function App() {
     setProducts((prev) => [...prev, product]);
   };
 
-  const handleEditProduct = (code: string, updatedName: string) => {
+  const handleEditProduct = (code: string, updatedName: string, updatedProducedQty?: number, updatedLine?: string) => {
     setProducts((prev) =>
-      prev.map((p) => (p.code === code ? { ...p, name: updatedName } : p))
+      prev.map((p) => (p.code === code ? { ...p, name: updatedName, producedQty: updatedProducedQty, line: updatedLine } : p))
     );
   };
 
@@ -616,6 +749,73 @@ export default function App() {
       localStorage.removeItem('q_systemEmailLogs');
       window.location.reload();
     }
+  };
+
+  const handleWipeDatabaseForTesting = () => {
+    const confirmation = confirm('Deseja limpar todos os chamados, produtos e empresas cadastrados no sistema para iniciar um teste do zero?');
+    if (!confirmation) return;
+
+    const typedName = prompt('Digite o nome da sua empresa/locatário de testes (ou deixe em branco para "Minha Empresa de Teste"):');
+    const tenantName = typedName ? typedName.trim() : 'Minha Empresa de Teste';
+
+    const testTenant: Tenant = {
+      id: 'tenant_test_1',
+      name: tenantName,
+      plan: 'Enterprise',
+      status: 'Ativo',
+      createdAt: new Date().toISOString(),
+      color: '#6366f1' // Indigo
+    };
+
+    const testUser: User = {
+      id: 'user_admin_test',
+      name: 'Administrador de Teste',
+      email: 'admin@dicompel.com.br',
+      role: 'ADMIN',
+      passwordHash: 'Dicompel!@#2026',
+      tenantId: 'tenant_test_1'
+    };
+
+    // Update states
+    setTickets([]);
+    setProducts([]);
+    setTenants([testTenant]);
+    setUsers([testUser]);
+    setActiveTenant(testTenant);
+    setCurrentUser(testUser);
+    setSystemEmailLogs([]);
+    setSelectedTicketId(null);
+    setActiveMenu('chamados');
+
+    // Update localStorage
+    localStorage.setItem('q_tickets', JSON.stringify([]));
+    localStorage.setItem('q_products', JSON.stringify([]));
+    localStorage.setItem('q_tenants', JSON.stringify([testTenant]));
+    localStorage.setItem('q_users', JSON.stringify([testUser]));
+    localStorage.setItem('q_activeTenant', JSON.stringify(testTenant));
+    localStorage.setItem('q_currentUser', JSON.stringify(testUser));
+    localStorage.setItem('q_systemEmailLogs', JSON.stringify([]));
+
+    alert(`Sistema limpo com sucesso!\n\nVocê já está autenticado como administrador no tenant '${tenantName}'.\n\nPode começar cadastrando seus produtos em "Cadastros & Configs" ou abrindo chamados do zero.`);
+  };
+
+  const handleWipeDatabaseForSimulation = () => {
+    const confirmation = confirm('Deseja limpar todos os chamados e todos os produtos do sistema para iniciar o simulado do zero?');
+    if (!confirmation) return;
+
+    // Update states
+    setTickets([]);
+    setProducts([]);
+    setSystemEmailLogs([]);
+    setSelectedTicketId(null);
+    setActiveMenu('chamados');
+
+    // Update localStorage
+    localStorage.setItem('q_tickets', JSON.stringify([]));
+    localStorage.setItem('q_products', JSON.stringify([]));
+    localStorage.setItem('q_systemEmailLogs', JSON.stringify([]));
+
+    alert('Sistema limpo com sucesso! Todos os chamados e produtos foram apagados. Agora você pode cadastrá-los um a um para simular o fluxo completo.');
   };
 
   // Retrieve single ticket for detailed view
@@ -733,24 +933,55 @@ export default function App() {
       </div>
 
       {/* 2. Main Executive Header */}
-      <header className="bg-white border-b border-slate-200 py-3.5 px-6 shadow-xs flex items-center justify-between no-print">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 bg-slate-850 rounded-lg flex items-center justify-center text-white font-extrabold text-xl font-mono shadow-xs">
-            Q
+      <header className="bg-white border-b border-slate-200 py-3 px-6 shadow-xs flex items-center justify-between no-print gap-4">
+        <div className="flex items-center gap-4 shrink-0">
+          <div className="bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-150 flex items-center justify-center">
+            <SimonDicompelLogo height={32} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-black text-slate-850 tracking-tight font-sans">QualiSAC</span>
-              <span className="text-[10px] uppercase font-bold text-blue-700 bg-blue-50 border border-blue-150 rounded-full px-2 py-0.5">
-                SAC & Qualidade
+              <span className="text-[10px] uppercase font-black tracking-wider text-blue-700 bg-blue-50 border border-blue-150 rounded-full px-2 py-0.5">
+                SAC &amp; Qualidade
               </span>
             </div>
-            <p className="text-[11px] text-slate-500">Inspirado na arquitetura de tickets GLPI</p>
+            <p className="text-[10px] text-slate-500 font-semibold">Inspirado na arquitetura de tickets GLPI</p>
+          </div>
+        </div>
+
+        {/* Real-time Global Search bar */}
+        <div className="flex-1 max-w-sm lg:max-w-md">
+          <div className="relative">
+            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-slate-400" />
+            </span>
+            <input
+              type="text"
+              placeholder="Pesquisa global real-time (ID, cliente, produto)..."
+              value={globalSearchTerm}
+              onChange={(e) => {
+                const val = e.target.value;
+                setGlobalSearchTerm(val);
+                // Switch focus to chamados tab to make the filter visible immediately
+                if (val && activeMenu !== 'chamados') {
+                  setActiveMenu('chamados');
+                }
+              }}
+              className="w-full pl-9 pr-8 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 hover:border-slate-350 focus:ring-1 focus:ring-blue-500 rounded-lg text-xs leading-5 text-slate-800 placeholder-slate-400 transition-all font-sans outline-none focus:outline-none"
+            />
+            {globalSearchTerm && (
+              <button
+                onClick={() => setGlobalSearchTerm('')}
+                className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                title="Limpar pesquisa"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
 
         {/* Profile info & out */}
-        <div className="flex items-center gap-4 text-xs font-semibold">
+        <div className="flex items-center gap-4 text-xs font-semibold shrink-0">
           <div className="text-right hidden sm:block">
             <p className="text-slate-800 font-bold">{currentUser.name}</p>
             <p className="text-[10px] text-slate-500 font-semibold">{currentUser.email}</p>
@@ -921,6 +1152,16 @@ export default function App() {
               <FolderSync className="w-3.5 h-3.5" />
               <span>Resetar Banco Local</span>
             </button>
+
+            <button
+              id="wipe-simulation-btn"
+              onClick={handleWipeDatabaseForSimulation}
+              className="w-full inline-flex items-center justify-center gap-1 px-3 py-2 text-[10px] font-bold text-rose-400 bg-slate-950 hover:bg-rose-950 hover:text-white rounded-lg border border-slate-800 hover:border-rose-900 transition-all cursor-pointer uppercase"
+              title="Zerar todos os chamados e produtos para simulação do zero"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+              <span>Zerar Produtos e Chamados</span>
+            </button>
             <p className="text-[9px] text-slate-600 text-center">Version 1.4.0 &bull; 2026</p>
             <p className="text-[9px] text-slate-500 font-medium text-center mt-1">Desenvolvido Coolit Soluções em TI.</p>
           </div>
@@ -942,12 +1183,20 @@ export default function App() {
                 onUpdateQualityReport={handleUpdateQualityReport}
                 onAddFile={handleAddFile}
                 onDeleteTicket={handleDeleteTicket}
+                onUpdateReminders={handleUpdateReminders}
               />
             ) : (
               /* Toggle components resting in normal tabs router state */
               <>
                 {activeMenu === 'dashboard' && (
-                  <DashboardView tickets={activeTenantTickets} />
+                  <DashboardView 
+                    tickets={activeTenantTickets} 
+                    products={products}
+                    onNavigateToTickets={(status) => {
+                      setDashboardStatusFilter(status || 'all');
+                      setActiveMenu('chamados');
+                    }}
+                  />
                 )}
 
                 {activeMenu === 'chamados' && (
@@ -956,6 +1205,10 @@ export default function App() {
                     onSelectTicket={(id) => setSelectedTicketId(id)}
                     onOpenNewTicketModal={() => setIsNewTicketModalOpen(true)}
                     canCreateTicket={canCreateTicket}
+                    globalSearchTerm={globalSearchTerm}
+                    onClearGlobalSearch={() => setGlobalSearchTerm('')}
+                    selectedStatusFilter={dashboardStatusFilter}
+                    onStatusFilterChange={setDashboardStatusFilter}
                   />
                 )}
 
@@ -1010,6 +1263,82 @@ export default function App() {
                             </div>
                           );
                         })}
+                      </div>
+
+                      {/* Form to create new tenant */}
+                      <div className="mt-8 pt-6 border-t border-slate-150">
+                        <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Cadastrar Novo Locatário (Tenant / Empresa)</h3>
+                        <form onSubmit={(e) => {
+                          e.preventDefault();
+                          const fd = new FormData(e.currentTarget);
+                          const n = fd.get('name') as string;
+                          const p = fd.get('plan') as string;
+                          if (!n.trim()) return;
+
+                          // Check duplicate
+                          if (tenants.some((t) => t.name.toLowerCase() === n.trim().toLowerCase())) {
+                            alert(`O tenant "${n.trim()}" já está cadastrado.`);
+                            return;
+                          }
+
+                          const newId = `tenant_${Date.now()}`;
+                          const newTenant: Tenant = {
+                            id: newId,
+                            name: n.trim(),
+                            plan: p as any || 'Enterprise',
+                            status: 'Ativo',
+                            createdAt: new Date().toISOString(),
+                            color: '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'), // Random color
+                          };
+
+                          // Create a default administrator user for this new tenant so they can log into it/use it
+                          const newTenantUser: User = {
+                            id: `user_${Date.now()}`,
+                            name: `Admin ${n.trim()}`,
+                            email: `admin@${n.trim().toLowerCase().replace(/[^a-z0-9]/g, '') || 'empresa'}.com.br`,
+                            role: 'ADMIN',
+                            passwordHash: 'Dicompel!@#2026',
+                            tenantId: newId,
+                          };
+
+                          setTenants((prev) => [...prev, newTenant]);
+                          setUsers((prev) => [...prev, newTenantUser]);
+                          
+                          // Auto switch to it
+                          setActiveTenant(newTenant);
+                          setCurrentUser(newTenantUser);
+
+                          e.currentTarget.reset();
+                          alert(`Empresa "${n.trim()}" cadastrada com sucesso e de forma ativa!\n\nUsuario administrador criado: \nEmail: ${newTenantUser.email}\nSenha padrão: Dicompel!@#2026`);
+                        }} className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="md:col-span-2">
+                            <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">Nome da Empresa / Locatário *</label>
+                            <input
+                              name="name"
+                              type="text"
+                              required
+                              placeholder="Ex: Cerâmica União S/A"
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs hover:border-slate-350 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-slate-800"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">Plano de Contrato</label>
+                            <select name="plan" className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 focus:outline-none">
+                              <option value="Enterprise">Enterprise</option>
+                              <option value="Growth">Growth</option>
+                              <option value="Trial">Trial</option>
+                            </select>
+                          </div>
+                          <div className="md:col-span-3 flex justify-end">
+                            <button
+                              type="submit"
+                              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Cadastrar &amp; Ativar Empresa</span>
+                            </button>
+                          </div>
+                        </form>
                       </div>
                     </div>
 

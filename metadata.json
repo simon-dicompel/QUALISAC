@@ -1,6 +1,6 @@
 {
   "name": "QualiSAC",
-  "description": "Sistema de SAC e Qualidade integrado para registro de devoluções, tratamento de não conformidades e gestão de chamados inspirado no GLPI.",
+  "description": "Sistema de SAC e Qualidade integrado para registro de devoluções, tratamento de não conformidades.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

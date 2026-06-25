@@ -14,13 +14,18 @@ import {
   ShieldAlert,
   Building,
   Mail,
-  Key
+  Key,
+  Download,
+  Upload,
+  FileSpreadsheet,
+  Filter,
+  Search
 } from 'lucide-react';
 
 interface AdminConfigViewProps {
   products: Product[];
   onAddProduct: (product: Product) => void;
-  onEditProduct: (code: string, updatedName: string) => void;
+  onEditProduct: (code: string, updatedName: string, updatedProducedQty?: number, updatedLine?: string) => void;
   onDeleteProduct: (code: string) => void;
   
   issueTypes: IssueTypeCategory[];
@@ -59,8 +64,20 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
   // Products states
   const [newProdCode, setNewProdCode] = useState('');
   const [newProdName, setNewProdName] = useState('');
+  const [newProdQty, setNewProdQty] = useState<string>('');
+  const [newProdLine, setNewProdLine] = useState('');
   const [editingCode, setEditingCode] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [editingQty, setEditingQty] = useState<string>('');
+  const [editingLine, setEditingLine] = useState('');
+  const [deletingProductCode, setDeletingProductCode] = useState<string | null>(null);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
+  const [deletingSubcategoryKey, setDeletingSubcategoryKey] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  
+  // Filtering states
+  const [filterLine, setFilterLine] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Issue types states
   const [newIssueType, setNewIssueType] = useState('');
@@ -87,12 +104,18 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
       return;
     }
 
+    const parsedQty = newProdQty.trim() ? parseInt(newProdQty, 10) : 0;
+
     onAddProduct({
       code: cleanCode,
       name: newProdName.trim(),
+      producedQty: isNaN(parsedQty) ? 0 : parsedQty,
+      line: newProdLine.trim() || 'Geral',
     });
     setNewProdCode('');
     setNewProdName('');
+    setNewProdQty('');
+    setNewProdLine('');
   };
 
   // Save edited product name
@@ -101,9 +124,133 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
       alert('O nome do produto não pode ficar em branco.');
       return;
     }
-    onEditProduct(code, editingName.trim());
+    const parsedQty = editingQty.trim() ? parseInt(editingQty, 10) : 0;
+    onEditProduct(code, editingName.trim(), isNaN(parsedQty) ? 0 : parsedQty, editingLine.trim() || 'Geral');
     setEditingCode(null);
     setEditingName('');
+    setEditingQty('');
+    setEditingLine('');
+  };
+
+  // Handler for Excel/CSV import
+  const handleImportExcelCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (!text) return;
+
+      const lines = text.split(/\r?\n/);
+      if (lines.length < 1) {
+        alert('O arquivo selecionado está vazio.');
+        return;
+      }
+
+      // Read header or first line
+      const firstLine = lines[0];
+      const separator = firstLine.includes(';') ? ';' : firstLine.includes('\t') ? '\t' : ',';
+      const headers = firstLine.split(separator).map(h => h.trim().toLowerCase());
+      
+      let codeIdx = -1;
+      let nameIdx = -1;
+      let lineIdx = -1;
+      let qtyIdx = -1;
+
+      headers.forEach((h, idx) => {
+        if (h.includes('codigo') || h.includes('código') || h.includes('sku') || h.includes('code')) {
+          codeIdx = idx;
+        } else if (h.includes('descri') || h.includes('nome') || h.includes('apresenta') || h.includes('description') || h.includes('name')) {
+          nameIdx = idx;
+        } else if (h.includes('linha') || h.includes('line')) {
+          lineIdx = idx;
+        } else if (h.includes('produz') || h.includes('volume') || h.includes('produced') || h.includes('quantidade') || h.includes('qtd')) {
+          qtyIdx = idx;
+        }
+      });
+
+      // Default fallbacks if header does not match perfectly
+      if (codeIdx === -1) codeIdx = 0;
+      if (nameIdx === -1) nameIdx = 1;
+      if (lineIdx === -1) lineIdx = 2;
+      if (qtyIdx === -1) qtyIdx = 3;
+
+      let successCount = 0;
+      let duplicateCount = 0;
+      let invalidCount = 0;
+
+      const importedProducts: Product[] = [];
+
+      // Determine if first row is header
+      const isFirstRowHeader = headers.some(h => 
+        h.includes('codigo') || h.includes('código') || h.includes('sku') || 
+        h.includes('descri') || h.includes('nome') || h.includes('linha') || h.includes('line')
+      );
+
+      const startIndex = isFirstRowHeader ? 1 : 0;
+
+      for (let i = startIndex; i < lines.length; i++) {
+        const lineText = lines[i].trim();
+        if (!lineText) continue;
+
+        const cells = lineText.split(separator).map(c => {
+          let cleaned = c.trim();
+          if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+            cleaned = cleaned.substring(1, cleaned.length - 1).trim();
+          }
+          return cleaned;
+        });
+
+        if (cells.length < 2) {
+          invalidCount++;
+          continue;
+        }
+
+        const sku = cells[codeIdx]?.trim().toUpperCase();
+        const description = cells[nameIdx]?.trim();
+        const productLine = cells[lineIdx]?.trim() || 'Geral';
+        const rawQty = cells[qtyIdx]?.trim() || '0';
+        
+        let qty = 0;
+        if (rawQty) {
+          qty = parseInt(rawQty.replace(/[^\d]/g, ''), 10);
+          if (isNaN(qty)) qty = 0;
+        }
+
+        if (!sku || !description) {
+          invalidCount++;
+          continue;
+        }
+
+        // Check duplication
+        const isDuplicate = products.some(p => p.code === sku) || importedProducts.some(p => p.code === sku);
+        if (isDuplicate) {
+          duplicateCount++;
+          continue;
+        }
+
+        importedProducts.push({
+          code: sku,
+          name: description,
+          line: productLine,
+          producedQty: qty,
+        });
+        successCount++;
+      }
+
+      if (importedProducts.length > 0) {
+        importedProducts.forEach(prod => {
+          onAddProduct(prod);
+        });
+        alert(`Importação concluída com sucesso!\n\n- ${successCount} produtos importados.\n- ${duplicateCount} SKUs duplicados ignorados.\n- ${invalidCount} linhas inválidas puladas.`);
+      } else {
+        alert(`Nenhum produto foi importado.\n- Duplicados: ${duplicateCount}\n- Inválidos: ${invalidCount}\n\nVerifique se o arquivo segue o formato correto (SKU, Descrição, Linha, Volume).`);
+      }
+      
+      e.target.value = '';
+    };
+    reader.readAsText(file);
   };
 
   // Submit Issue Type handler
@@ -273,7 +420,7 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
                   id="reg-prod-code"
                   type="text"
                   required
-                  placeholder="Ex: PROD-F104"
+                  placeholder="Ex: DC-1200"
                   value={newProdCode}
                   onChange={(e) => setNewProdCode(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -281,14 +428,39 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">Nome de Apresentação Comercial *</label>
+                <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">Nome / Descrição Comercial *</label>
                 <input
                   id="reg-prod-name"
                   type="text"
                   required
-                  placeholder="Ex: Doce de Leite com Coco 400g"
+                  placeholder="Ex: Interruptor Simples"
                   value={newProdName}
                   onChange={(e) => setNewProdName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">Linha do Produto</label>
+                <input
+                  id="reg-prod-line"
+                  type="text"
+                  placeholder="Ex: Novara, Classique"
+                  value={newProdLine}
+                  onChange={(e) => setNewProdLine(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">Quantidade Produzida (Volume Total)</label>
+                <input
+                  id="reg-prod-qty"
+                  type="number"
+                  min="0"
+                  placeholder="Ex: 50000"
+                  value={newProdQty}
+                  onChange={(e) => setNewProdQty(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -296,24 +468,88 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
               <button
                 id="reg-prod-submit"
                 type="submit"
-                className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
               >
                 <Plus className="w-4 h-4" />
                 <span>Salvar Produto</span>
               </button>
             </form>
+
+            {/* Excel / CSV Import Section */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-dashed border-slate-300 space-y-3">
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide">Importar Planilha</h4>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Importe múltiplos produtos instantaneamente de arquivos de planilhas Excel (exportados como CSV ou TXT).
+              </p>
+              
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-[10px] text-slate-500 font-mono space-y-1">
+                <div className="font-bold border-b border-slate-100 pb-1 text-slate-600">Formato esperado (Exemplo):</div>
+                <div>Código do produto;Descrição;Linha;Quantidade</div>
+                <div>DC-1200;Interruptor Simples;Novara;25000</div>
+                <div>DC-1300;Interruptor Duplo;Novara;15000</div>
+              </div>
+
+              <div className="pt-1">
+                <label 
+                  htmlFor="import-excel-file" 
+                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-650 hover:text-white rounded-lg border border-emerald-200 hover:border-emerald-600 transition-all cursor-pointer shadow-xs uppercase tracking-wider"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Importar Planilha Excel/CSV</span>
+                </label>
+                <input
+                  id="import-excel-file"
+                  type="file"
+                  accept=".csv,.txt"
+                  onChange={handleImportExcelCSV}
+                  className="hidden"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Preset list of Products */}
           <div className="bg-white p-5 rounded-xl border border-slate-100 card-shadow lg:col-span-2 space-y-4">
-            <div>
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                <Package className="w-4 h-4 text-blue-500" />
-                <span>Catálogo de Produtos Cadastrados</span>
-              </h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Lista de materiais e mercadorias habilitados para as operações do SAC.
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Package className="w-4 h-4 text-blue-500" />
+                  <span>Catálogo de Produtos Cadastrados</span>
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Lista de materiais e mercadorias habilitados para as operações do SAC.
+                </p>
+              </div>
+            </div>
+
+            {/* Search and Line Filters */}
+            <div className="flex flex-col sm:flex-row gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
+              <div className="flex-1 relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Pesquisar por SKU, nome ou linha..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 border border-slate-250 bg-white rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Filter className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <select
+                  value={filterLine}
+                  onChange={(e) => setFilterLine(e.target.value)}
+                  className="px-3 py-1.5 border border-slate-250 bg-white rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-40"
+                >
+                  <option value="all">Todas as Linhas</option>
+                  {Array.from(new Set(products.map(p => p.line || 'Geral'))).filter(Boolean).sort().map(line => (
+                    <option key={line} value={line}>{line}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="overflow-x-auto border border-slate-100 rounded-lg">
@@ -321,82 +557,147 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
                 <thead className="bg-slate-50 text-slate-500 uppercase text-[9px] font-bold border-b border-slate-100">
                   <tr>
                     <th className="py-2.5 px-3">Código SKU</th>
-                    <th className="py-2.5 px-3">Nome Técnico do Produto</th>
+                    <th className="py-2.5 px-3">Nome Comercial / Descrição</th>
+                    <th className="py-2.5 px-3">Linha</th>
+                    <th className="py-2.5 px-3 text-center">Volume Produzido</th>
                     <th className="py-2.5 px-3 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {products.map((p) => {
-                    const isEditing = editingCode === p.code;
-                    
-                    return (
-                      <tr key={p.code} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-3 px-3">
-                          <code className="bg-slate-150 text-slate-800 px-2 py-0.5 rounded font-mono text-[10px] font-bold">
-                            {p.code}
-                          </code>
-                        </td>
-                        <td className="py-3 px-3">
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={editingName}
-                              onChange={(e) => setEditingName(e.target.value)}
-                              className="px-2 py-1 border border-blue-400 bg-white rounded text-xs w-full max-w-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-400"
-                            />
-                          ) : (
-                            <span className="font-medium text-slate-800">{p.name}</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-3 text-right">
-                          <div className="flex gap-2 justify-end">
+                  {products
+                    .filter((p) => {
+                      const pLine = p.line || 'Geral';
+                      const matchesLine = filterLine === 'all' || pLine === filterLine;
+                      const matchesSearch = p.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                            p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                            pLine.toLowerCase().includes(searchQuery.toLowerCase());
+                      return matchesLine && matchesSearch;
+                    })
+                    .map((p) => {
+                      const isEditing = editingCode === p.code;
+                      
+                      return (
+                        <tr key={p.code} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-3 px-3">
+                            <code className="bg-slate-150 text-slate-800 px-2 py-0.5 rounded font-mono text-[10px] font-bold">
+                              {p.code}
+                            </code>
+                          </td>
+                          <td className="py-3 px-3">
                             {isEditing ? (
-                              <>
-                                <button
-                                  onClick={() => handleSaveProductEdit(p.code)}
-                                  className="p-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-600 hover:text-white rounded-lg border border-emerald-200 transition-all cursor-pointer"
-                                  title="Salvar Alterações"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => setEditingCode(null)}
-                                  className="p-1.5 bg-slate-50 hover:bg-slate-600 text-slate-400 hover:text-white rounded-lg border border-slate-200 transition-all cursor-pointer"
-                                  title="Cancelar"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
-                              </>
+                              <input
+                                type="text"
+                                value={editingName}
+                                onChange={(e) => setEditingName(e.target.value)}
+                                className="px-2 py-1 border border-blue-400 bg-white rounded text-xs w-full max-w-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-400"
+                              />
                             ) : (
-                              <>
-                                <button
-                                  onClick={() => {
-                                    setEditingCode(p.code);
-                                    setEditingName(p.name);
-                                  }}
-                                  className="p-1.5 text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-lg transition-all cursor-pointer"
-                                  title="Editar Produto"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    if (confirm(`Tem certeza de que deseja remover o produto "${p.name}" (${p.code}) do catálogo?`)) {
-                                      onDeleteProduct(p.code);
-                                    }
-                                  }}
-                                  className="p-1.5 text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-lg transition-all cursor-pointer"
-                                  title="Excluir do Catálogo"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </>
+                              <span className="font-medium text-slate-800">{p.name}</span>
                             )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          </td>
+                          <td className="py-3 px-3">
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editingLine}
+                                onChange={(e) => setEditingLine(e.target.value)}
+                                className="px-2 py-1 border border-blue-400 bg-white rounded text-xs w-28 text-slate-800 outline-none focus:ring-2 focus:ring-blue-400"
+                              />
+                            ) : (
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[11px] font-medium border border-slate-200">
+                                {p.line || 'Geral'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                min="0"
+                                value={editingQty}
+                                onChange={(e) => setEditingQty(e.target.value)}
+                                className="px-2 py-1 border border-blue-400 bg-white rounded text-xs w-24 text-center text-slate-800 outline-none focus:ring-2 focus:ring-blue-400"
+                              />
+                            ) : (
+                              <span className="font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded">
+                                {(p.producedQty ?? 0).toLocaleString('pt-BR')}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="flex gap-2 justify-end">
+                              {isEditing ? (
+                                <>
+                                  <button
+                                    onClick={() => handleSaveProductEdit(p.code)}
+                                    className="p-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-600 hover:text-white rounded-lg border border-emerald-200 transition-all cursor-pointer"
+                                    title="Salvar Alterações"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingCode(null)}
+                                    className="p-1.5 bg-slate-50 hover:bg-slate-600 text-slate-400 hover:text-white rounded-lg border border-slate-200 transition-all cursor-pointer"
+                                    title="Cancelar"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                              {deletingProductCode === p.code ? (
+                                <div className="flex items-center gap-1.5 bg-rose-50 p-1 rounded-lg border border-rose-100">
+                                  <span className="text-[10px] font-bold text-rose-700 px-1">Confirma?</span>
+                                  <button
+                                    onClick={() => {
+                                      onDeleteProduct(p.code);
+                                      setDeletingProductCode(null);
+                                    }}
+                                    className="p-1 bg-rose-600 hover:bg-rose-700 text-white rounded transition-colors cursor-pointer"
+                                    title="Confirmar Exclusão"
+                                  >
+                                    <Check className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => setDeletingProductCode(null)}
+                                    className="p-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded transition-colors cursor-pointer"
+                                    title="Cancelar"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setEditingCode(p.code);
+                                      setEditingName(p.name);
+                                      setEditingQty(String(p.producedQty ?? 0));
+                                      setEditingLine(p.line || 'Geral');
+                                    }}
+                                    className="p-1.5 text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-lg transition-all cursor-pointer"
+                                    title="Editar Produto"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setDeletingProductCode(p.code);
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-lg transition-all cursor-pointer"
+                                    title="Excluir do Catálogo"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
@@ -535,21 +836,42 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
                       </span>
                     </div>
                     
-                    <button
-                      onClick={() => {
-                        if (['it_defeito', 'it_avaria', 'it_troca', 'it_logistica', 'it_outro'].includes(cat.id)) {
-                          alert('Por motivos de conformidade histórica dos relatórios, as categorias nativas não podem ser removidas do sistema.');
-                          return;
-                        }
-                        if (confirm(`Remover a categoria de desvio "${cat.name}" e todas as suas subcategorias do sistema? Chamados existentes não serão apagados.`)) {
-                          onDeleteIssueType(cat.id);
-                        }
-                      }}
-                      className="p-1 hover:bg-rose-100 hover:text-rose-600 rounded text-slate-400 transition-colors cursor-pointer"
-                      title={['it_defeito', 'it_avaria', 'it_troca', 'it_logistica', 'it_outro'].includes(cat.id) ? 'Protegido de remoção' : 'Apagar categoria'}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {deletingCategoryId === cat.id ? (
+                      <div className="flex items-center gap-1 bg-rose-50 p-1 rounded-lg border border-rose-200">
+                        <span className="text-[10px] font-bold text-rose-700 px-1">Excluir?</span>
+                        <button
+                          onClick={() => {
+                            onDeleteIssueType(cat.id);
+                            setDeletingCategoryId(null);
+                          }}
+                          className="p-1 bg-rose-600 hover:bg-rose-700 text-white rounded cursor-pointer"
+                          title="Confirmar"
+                        >
+                          <Check className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => setDeletingCategoryId(null)}
+                          className="p-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded cursor-pointer"
+                          title="Cancelar"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          if (['it_defeito', 'it_avaria', 'it_troca', 'it_logistica', 'it_outro'].includes(cat.id)) {
+                            alert('Por motivos de conformidade histórica dos relatórios, as categorias nativas não podem ser removidas do sistema.');
+                            return;
+                          }
+                          setDeletingCategoryId(cat.id);
+                        }}
+                        className="p-1 hover:bg-rose-100 hover:text-rose-600 rounded text-slate-400 transition-colors cursor-pointer"
+                        title={['it_defeito', 'it_avaria', 'it_troca', 'it_logistica', 'it_outro'].includes(cat.id) ? 'Protegido de remoção' : 'Apagar categoria'}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
 
                   {cat.subcategories.length === 0 ? (
@@ -559,21 +881,46 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
                       {cat.subcategories.map((sub) => (
                         <div 
                           key={sub}
-                          className="flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 hover:border-rose-250 rounded-lg text-[11px] text-slate-700 transition-all group"
+                          className={`flex items-center gap-1 px-2.5 py-1 bg-white border rounded-lg text-[11px] text-slate-700 transition-all group ${
+                            deletingSubcategoryKey === `${cat.id}-${sub}`
+                              ? 'border-rose-300 bg-rose-50/30'
+                              : 'border-slate-200 hover:border-rose-250'
+                          }`}
                         >
                           <span className="text-slate-450">▪</span>
                           <span className="font-semibold text-slate-750">{sub}</span>
-                          <button
-                            onClick={() => {
-                              if (confirm(`Remover a subcategoria "${sub}" da categoria "${cat.name}"?`)) {
-                                onDeleteSubcategory(cat.id, sub);
-                              }
-                            }}
-                            className="ml-1 text-slate-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                            title="Excluir subcategoria"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                          
+                          {deletingSubcategoryKey === `${cat.id}-${sub}` ? (
+                            <div className="flex items-center gap-1 ml-1.5 animate-in fade-in duration-100">
+                              <button
+                                onClick={() => {
+                                  onDeleteSubcategory(cat.id, sub);
+                                  setDeletingSubcategoryKey(null);
+                                }}
+                                className="p-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded cursor-pointer"
+                                title="Confirmar"
+                              >
+                                <Check className="w-2.5 h-2.5" />
+                              </button>
+                              <button
+                                onClick={() => setDeletingSubcategoryKey(null)}
+                                className="p-0.5 bg-slate-200 hover:bg-slate-350 text-slate-750 rounded cursor-pointer"
+                                title="Cancelar"
+                              >
+                                <X className="w-2.5 h-2.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setDeletingSubcategoryKey(`${cat.id}-${sub}`);
+                              }}
+                              className="ml-1 text-slate-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                              title="Excluir subcategoria"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -748,26 +1095,47 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
                           </div>
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <button
-                            onClick={() => {
-                              if (u.id === 'user_admin') {
-                                alert('O usuário Administrador Principal não pode ser removido para evitar bloqueio permanente de acesso ao sistema.');
-                                return;
-                              }
-                              if (confirm(`Deseja remover permanentemente o login de "${u.name}" (${u.role}) do sistema?`)) {
-                                onDeleteUser(u.id);
-                              }
-                            }}
-                            disabled={u.id === 'user_admin'}
-                            className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
-                              u.id === 'user_admin'
-                                ? 'bg-slate-50 text-slate-350 border-slate-100 cursor-not-allowed'
-                                : 'text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 border-slate-200 hover:border-rose-200'
-                            }`}
-                            title={u.id === 'user_admin' ? 'Protegido contra exclusão' : 'Excluir Usuário'}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {deletingUserId === u.id ? (
+                            <div className="flex items-center gap-1.5 bg-rose-50 p-1 rounded-lg border border-rose-100 justify-end">
+                              <span className="text-[10px] font-bold text-rose-700 px-1">Confirma?</span>
+                              <button
+                                onClick={() => {
+                                  onDeleteUser(u.id);
+                                  setDeletingUserId(null);
+                                }}
+                                className="p-1 bg-rose-600 hover:bg-rose-700 text-white rounded transition-colors cursor-pointer"
+                                title="Confirmar Exclusão"
+                              >
+                                <Check className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => setDeletingUserId(null)}
+                                className="p-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded transition-colors cursor-pointer"
+                                title="Cancelar"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                if (u.id === 'user_admin') {
+                                  alert('O usuário Administrador Principal não pode ser removido para evitar bloqueio permanente de acesso ao sistema.');
+                                  return;
+                                }
+                                setDeletingUserId(u.id);
+                              }}
+                              disabled={u.id === 'user_admin'}
+                              className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                                u.id === 'user_admin'
+                                  ? 'bg-slate-50 text-slate-350 border-slate-100 cursor-not-allowed'
+                                  : 'text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 border-slate-200 hover:border-rose-200'
+                              }`}
+                              title={u.id === 'user_admin' ? 'Protegido contra exclusão' : 'Excluir Usuário'}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );

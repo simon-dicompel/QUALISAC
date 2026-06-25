@@ -12,7 +12,9 @@ import {
   AlertCircle,
   Clock,
   CheckCircle,
-  FileText
+  FileText,
+  X,
+  ListTodo
 } from 'lucide-react';
 
 interface TicketListProps {
@@ -20,6 +22,10 @@ interface TicketListProps {
   onSelectTicket: (ticketId: string) => void;
   onOpenNewTicketModal: () => void;
   canCreateTicket: boolean;
+  globalSearchTerm?: string;
+  onClearGlobalSearch?: () => void;
+  selectedStatusFilter?: string;
+  onStatusFilterChange?: (status: string) => void;
 }
 
 export const TicketList: React.FC<TicketListProps> = ({
@@ -27,25 +33,64 @@ export const TicketList: React.FC<TicketListProps> = ({
   onSelectTicket,
   onOpenNewTicketModal,
   canCreateTicket,
+  globalSearchTerm = '',
+  onClearGlobalSearch,
+  selectedStatusFilter = 'all',
+  onStatusFilterChange,
 }) => {
   // Filters State
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>(selectedStatusFilter);
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
-  // Filter application
+  // Sync status filter with parent's dashboard clicks
+  React.useEffect(() => {
+    if (selectedStatusFilter) {
+      setStatusFilter(selectedStatusFilter);
+    }
+  }, [selectedStatusFilter]);
+
+  // Filter application handling both global & local inputs and date range picker
   const filteredTickets = tickets.filter((ticket) => {
-    const matchesSearch =
-      ticket.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.productCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.batch.toLowerCase().includes(searchQuery.toLowerCase());
+    const sQuery = searchQuery.toLowerCase();
+    const gQuery = globalSearchTerm.toLowerCase();
+
+    const matchesLocalSearch =
+      !sQuery ||
+      ticket.id.toLowerCase().includes(sQuery) ||
+      ticket.productCode.toLowerCase().includes(sQuery) ||
+      ticket.productName.toLowerCase().includes(sQuery) ||
+      ticket.clientName.toLowerCase().includes(sQuery) ||
+      ticket.batch.toLowerCase().includes(sQuery);
+
+    const matchesGlobalSearch =
+      !gQuery ||
+      ticket.id.toLowerCase().includes(gQuery) ||
+      ticket.productCode.toLowerCase().includes(gQuery) ||
+      ticket.productName.toLowerCase().includes(gQuery) ||
+      ticket.clientName.toLowerCase().includes(gQuery) ||
+      ticket.batch.toLowerCase().includes(gQuery);
 
     const matchesStatus = statusFilter === 'all' || ticket.status === statusFilter;
     const matchesType = typeFilter === 'all' || ticket.issueType === typeFilter;
 
-    return matchesSearch && matchesStatus && matchesType;
+    // Open date filtering check
+    let matchesDateRange = true;
+    if (startDate || endDate) {
+      const ticketTime = new Date(ticket.createdAt).getTime();
+      if (startDate) {
+        const startMs = new Date(startDate + 'T00:00:00').getTime();
+        if (ticketTime < startMs) matchesDateRange = false;
+      }
+      if (endDate) {
+        const endMs = new Date(endDate + 'T23:59:59').getTime();
+        if (ticketTime > endMs) matchesDateRange = false;
+      }
+    }
+
+    return matchesLocalSearch && matchesGlobalSearch && matchesStatus && matchesType && matchesDateRange;
   });
 
   // Export to CSV simulation
@@ -184,56 +229,122 @@ export const TicketList: React.FC<TicketListProps> = ({
       </div>
 
       {/* 2. Direct Filter Bar */}
-      <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row gap-3">
-        {/* Input Search */}
-        <div className="relative flex-1">
-          <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-            <Search className="w-4 h-4" />
-          </span>
-          <input
-            id="ticket-search-input"
-            type="text"
-            placeholder="Pesquisar por Código, Lote, Cliente, ID ou Nome..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-slate-250 rounded-lg text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
+      <div className="p-4 border-b border-slate-100 flex flex-col xl:flex-row xl:items-center justify-between gap-3 bg-slate-50/55">
+        <div className="flex flex-col md:flex-row gap-3 flex-1">
+          {/* Input Search */}
+          <div className="relative flex-1">
+            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <Search className="w-4 h-4" />
+            </span>
+            <input
+              id="ticket-search-input"
+              type="text"
+              placeholder="Pesquisar por Código, Lote, Cliente, ID ou Nome..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 border border-slate-250 rounded-lg text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+            />
+          </div>
+
+          {/* Status Dropdown */}
+          <div className="w-full md:w-48">
+            <select
+              id="status-filter-select"
+              value={statusFilter}
+              onChange={(e) => {
+                const val = e.target.value;
+                setStatusFilter(val);
+                onStatusFilterChange?.(val);
+              }}
+              className="w-full px-3 py-2 border border-slate-250 rounded-lg text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">🔍 Status: Todos</option>
+              <option value="Aberto">🟠 Aberto</option>
+              <option value="Em analise">🔴 Em análise</option>
+              <option value="Em tratativa">🔵 Em tratativa</option>
+              <option value="Resolvido">🟢 Resolvido</option>
+              <option value="Finalizado">⚫ Finalizado</option>
+            </select>
+          </div>
+
+          {/* Type Dropdown */}
+          <div className="w-full md:w-52">
+            <select
+              id="type-filter-select"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-250 rounded-lg text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">🏷️ Problema: Todos</option>
+              <option value="Avaria">📦 Avaria</option>
+              <option value="Defeito">⚙️ Defeito de Fábrica</option>
+              <option value="Troca">🔄 Troca</option>
+              <option value="Erro de Logística">🚒 Erro de Logística</option>
+              <option value="Outro">💬 Outro</option>
+            </select>
+          </div>
         </div>
 
-        {/* Status Dropdown */}
-        <div className="w-full md:w-48">
-          <select
-            id="status-filter-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full px-3 py-2 border border-slate-250 rounded-lg text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">🔍 Status: Todos</option>
-            <option value="Aberto">🟠 Aberto</option>
-            <option value="Em analise">🔴 Em análise</option>
-            <option value="Em tratativa">🔵 Em tratativa</option>
-            <option value="Resolvido">🟢 Resolvido</option>
-            <option value="Finalizado">⚫ Finalizado</option>
-          </select>
-        </div>
-
-        {/* Type Dropdown */}
-        <div className="w-full md:w-52">
-          <select
-            id="type-filter-select"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="w-full px-3 py-2 border border-slate-250 rounded-lg text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">🏷️ Problema: Todos</option>
-            <option value="Avaria">📦 Avaria</option>
-            <option value="Defeito">⚙️ Defeito de Fábrica</option>
-            <option value="Troca">🔄 Troca</option>
-            <option value="Erro de Logística">🚒 Erro de Logística</option>
-            <option value="Outro">💬 Outro</option>
-          </select>
+        {/* Date Filters block */}
+        <div className="flex flex-wrap items-center gap-2 pt-3 xl:pt-0 border-t xl:border-t-0 xl:border-l xl:pl-3 border-slate-200">
+          <div className="relative">
+            <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-[9px] uppercase font-bold text-slate-400">
+              De:
+            </span>
+            <input
+              id="start-date-filter"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full sm:w-36 pl-8 pr-2 py-1.5 border border-slate-250 rounded-lg text-xs text-slate-705 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              title="Data de abertura inicial"
+            />
+          </div>
+          <div className="relative">
+            <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-[9px] uppercase font-bold text-slate-400">
+              Até:
+            </span>
+            <input
+              id="end-date-filter"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full sm:w-36 pl-8 pr-2 py-1.5 border border-slate-250 rounded-lg text-xs text-slate-705 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              title="Data de abertura limite"
+            />
+          </div>
+          {(startDate || endDate) && (
+            <button
+              onClick={() => {
+                setStartDate('');
+                setEndDate('');
+              }}
+              className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-750 rounded-lg text-[10px] font-bold uppercase transition-all shrink-0 cursor-pointer"
+              title="Limpar período de datas"
+            >
+              Limpar Datas
+            </button>
+          )}
         </div>
       </div>
+
+      {globalSearchTerm && (
+        <div className="mx-4 mt-2 mb-3 p-2 bg-indigo-50 border border-indigo-100 rounded-lg flex items-center justify-between text-xs text-indigo-800">
+          <div className="flex items-center gap-1.5 font-bold">
+            <span className="w-2 h-2 bg-indigo-600 rounded-full animate-ping shrink-0 text-[10px]"></span>
+            <span>Busca global ativa: <span className="text-indigo-950 font-black italic">"{globalSearchTerm}"</span></span>
+          </div>
+          {onClearGlobalSearch && (
+            <button
+              onClick={onClearGlobalSearch}
+              className="text-[10px] font-black uppercase text-indigo-600 hover:text-indigo-900 cursor-pointer flex items-center gap-0.5"
+            >
+              <X className="w-3 h-3" />
+              <span>Limpar Filtro</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* 3. Ticket Table */}
       <div className="overflow-x-auto">
@@ -266,6 +377,17 @@ export const TicketList: React.FC<TicketListProps> = ({
                       <Calendar className="w-3 h-3" />
                       <span>Aberto em: {new Date(ticket.createdAt).toLocaleDateString()} {new Date(ticket.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
+                    {ticket.reminders && ticket.reminders.length > 0 && (
+                      <div className="mt-1.5 flex items-center gap-1 text-[10px] bg-slate-50 border border-slate-200 text-slate-600 px-2 py-0.5 rounded-md w-max font-bold transition-all hover:bg-slate-100">
+                        <ListTodo className="w-3 h-3 text-indigo-600 shrink-0" />
+                        <span>
+                          {ticket.reminders.filter((r) => r.completed).length}/{ticket.reminders.length} tarefas
+                        </span>
+                        {ticket.reminders.some((r) => !r.completed && new Date(r.dueDate + 'T23:59:59').getTime() < Date.now()) && (
+                          <span className="text-rose-600 ml-1.5 font-bold uppercase tracking-wider text-[8px] px-1 bg-rose-50 border border-rose-100 rounded-sm"> atrasada </span>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <div className="font-medium text-slate-800">{ticket.productName}</div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Ticket, TicketStatus, User, TicketComment, QualityReport, IssueType } from '../types';
+import { Ticket, TicketStatus, User, TicketComment, QualityReport, IssueType, TicketReminder } from '../types';
 import { generateAIQualityReport } from '../utils/gemini';
 import { 
   ArrowLeft, 
@@ -17,7 +17,10 @@ import {
   Printer,
   ChevronRight,
   Sparkles,
-  Download
+  Download,
+  ListTodo,
+  Check,
+  X
 } from 'lucide-react';
 
 interface TicketDetailsProps {
@@ -30,6 +33,7 @@ interface TicketDetailsProps {
   onUpdateQualityReport: (ticketId: string, report: QualityReport) => void;
   onAddFile: (ticketId: string, name: string, size: string, type: string, url: string) => void;
   onDeleteTicket: (ticketId: string) => void;
+  onUpdateReminders: (ticketId: string, reminders: TicketReminder[]) => void;
 }
 
 export const TicketDetails: React.FC<TicketDetailsProps> = ({
@@ -42,12 +46,74 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
   onUpdateQualityReport,
   onAddFile,
   onDeleteTicket,
+  onUpdateReminders,
 }) => {
   // Tabs for the right panel: "Analise de Qualidade" vs "Comentarios e Auditoria"
   const [activeTab, setActiveTab] = useState<'qualidade' | 'interacoes'>('qualidade');
   
   // Comments input text
   const [newComment, setNewComment] = useState('');
+
+  // Reminder (secondary task) form state variables
+  const [reminderText, setReminderText] = useState('');
+  const [reminderDueDate, setReminderDueDate] = useState('');
+  const [reminderPriority, setReminderPriority] = useState<'Baixa' | 'Média' | 'Alta'>('Média');
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+
+  // Auto-save & load comment to/from localStorage
+  React.useEffect(() => {
+    const saved = localStorage.getItem(`autosave_comment_${ticket.id}`);
+    if (saved !== null) {
+      setNewComment(saved);
+    } else {
+      setNewComment('');
+    }
+  }, [ticket.id]);
+
+  React.useEffect(() => {
+    if (newComment) {
+      localStorage.setItem(`autosave_comment_${ticket.id}`, newComment);
+    } else {
+      localStorage.removeItem(`autosave_comment_${ticket.id}`);
+    }
+  }, [newComment, ticket.id]);
+
+  // Reminders Management Operations
+  const handleAddReminder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reminderText.trim()) return;
+
+    const newReminder: TicketReminder = {
+      id: `rem_${Date.now()}`,
+      text: reminderText.trim(),
+      dueDate: reminderDueDate || new Date().toISOString().split('T')[0],
+      priority: reminderPriority,
+      completed: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    const currentReminders = ticket.reminders || [];
+    onUpdateReminders(ticket.id, [...currentReminders, newReminder]);
+
+    // Clear form inputs
+    setReminderText('');
+    setReminderDueDate('');
+    setReminderPriority('Média');
+  };
+
+  const handleToggleReminder = (reminderId: string) => {
+    const currentReminders = ticket.reminders || [];
+    const updated = currentReminders.map((r) => 
+      r.id === reminderId ? { ...r, completed: !r.completed } : r
+    );
+    onUpdateReminders(ticket.id, updated);
+  };
+
+  const handleRemoveReminder = (reminderId: string) => {
+    const currentReminders = ticket.reminders || [];
+    const updated = currentReminders.filter((r) => r.id !== reminderId);
+    onUpdateReminders(ticket.id, updated);
+  };
 
   // 5 Whys state
   const [rootCause, setRootCause] = useState(ticket.qualityReport?.rootCause || '');
@@ -65,14 +131,40 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
   const [responsible, setResponsible] = useState(ticket.qualityReport?.responsible || '');
   const [targetDate, setTargetDate] = useState(ticket.qualityReport?.targetDate || '');
 
+  // Flag indicating if there are unsaved localized changes in the browser (Autosave indicator)
+  const [isDraftAutosaved, setIsDraftAutosaved] = useState(false);
+
   // AI Loading state
   const [isAiLoading, setIsAiLoading] = useState(false);
 
   // File Upload State
   const [dragActive, setDragActive] = useState(false);
 
-  // Sync state if ticket changes
+  // Sync state if ticket changes, checking for autosaved draft first
   React.useEffect(() => {
+    const savedDraft = localStorage.getItem(`autosave_quality_draft_${ticket.id}`);
+    if (savedDraft) {
+      try {
+        const draft = JSON.parse(savedDraft);
+        setRootCause(draft.rootCause ?? '');
+        setWhys(draft.fiveWhys ?? [
+          'Por que o problema ocorreu? ',
+          'Por que... ',
+          'Por que... ',
+          'Por que... ',
+          'Por que... '
+        ]);
+        setCorrectiveAction(draft.correctiveAction ?? '');
+        setPreventiveAction(draft.preventiveAction ?? '');
+        setResponsible(draft.responsible ?? '');
+        setTargetDate(draft.targetDate ?? '');
+        setIsDraftAutosaved(true);
+        return;
+      } catch (e) {
+        console.error('Error parsing quality report draft:', e);
+      }
+    }
+
     setRootCause(ticket.qualityReport?.rootCause || '');
     setWhys(
       ticket.qualityReport?.fiveWhys || [
@@ -87,7 +179,43 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
     setPreventiveAction(ticket.qualityReport?.preventiveAction || '');
     setResponsible(ticket.qualityReport?.responsible || '');
     setTargetDate(ticket.qualityReport?.targetDate || '');
+    setIsDraftAutosaved(false);
+    setIsConfirmingDelete(false);
   }, [ticket]);
+
+  // Auto-save quality draft changes to localStorage
+  React.useEffect(() => {
+    const savedReport = ticket.qualityReport;
+    const isDifferent =
+      rootCause !== (savedReport?.rootCause || '') ||
+      JSON.stringify(whys) !== JSON.stringify(savedReport?.fiveWhys || [
+        'Por que o problema ocorreu? ',
+        'Por que... ',
+        'Por que... ',
+        'Por que... ',
+        'Por que... '
+      ]) ||
+      correctiveAction !== (savedReport?.correctiveAction || '') ||
+      preventiveAction !== (savedReport?.preventiveAction || '') ||
+      responsible !== (savedReport?.responsible || '') ||
+      targetDate !== (savedReport?.targetDate || '');
+
+    if (isDifferent) {
+      const draft = {
+        rootCause,
+        fiveWhys: whys,
+        correctiveAction,
+        preventiveAction,
+        responsible,
+        targetDate,
+      };
+      localStorage.setItem(`autosave_quality_draft_${ticket.id}`, JSON.stringify(draft));
+      setIsDraftAutosaved(true);
+    } else {
+      localStorage.removeItem(`autosave_quality_draft_${ticket.id}`);
+      setIsDraftAutosaved(false);
+    }
+  }, [rootCause, whys, correctiveAction, preventiveAction, responsible, targetDate, ticket.id, ticket.qualityReport]);
 
   // Handle active permissions
   const isQualidadeOrAdmin = currentUser.role === 'QUALIDADE' || currentUser.role === 'ADMIN';
@@ -135,6 +263,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
     if (!newComment.trim()) return;
     onAddComment(ticket.id, newComment);
     setNewComment('');
+    localStorage.removeItem(`autosave_comment_${ticket.id}`);
   };
 
   // Submit Technical quality report
@@ -156,6 +285,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
     };
 
     onUpdateQualityReport(ticket.id, report);
+    localStorage.removeItem(`autosave_quality_draft_${ticket.id}`);
     alert('✅ Relatório técnico de análise de causa e ações corretivas atualizado no chamado!');
   };
 
@@ -595,26 +725,51 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
           </div>
 
           {/* Delete Action button (Admin Only) */}
-          <button
-            id={`delete-ticket-btn`}
-            onClick={() => {
-              if (currentUser.role === 'ADMIN') {
-                onDeleteTicket(ticket.id);
-              } else {
-                alert('Apenas o perfil Administrador (ADMIN) possui permissão para apagar chamados do sistema.');
-              }
-            }}
-            disabled={currentUser.role !== 'ADMIN'}
-            title={currentUser.role === 'ADMIN' ? 'Apagar este chamado permanentemente' : 'Apenas o administrador do sistema pode apagar chamados'}
-            className={`px-3 py-2 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all select-none cursor-pointer h-[46px] sm:h-auto ${
-              currentUser.role === 'ADMIN'
-                ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-600 hover:text-white hover:border-red-600 shadow-sm shadow-red-500/10'
-                : 'bg-slate-100 text-slate-400 border-slate-200 opacity-60 cursor-not-allowed'
-            }`}
-          >
-            <Trash2 className="w-4 h-4" />
-            <span>Apagar Chamado</span>
-          </button>
+          {isConfirmingDelete ? (
+            <div className="flex items-center gap-2 bg-rose-50 p-2 rounded-xl border border-rose-200 animate-in fade-in duration-200">
+              <span className="text-xs font-bold text-rose-800 hidden sm:inline">Excluir permanentemente este chamado?</span>
+              <button
+                onClick={() => {
+                  onDeleteTicket(ticket.id);
+                  setIsConfirmingDelete(false);
+                }}
+                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg transition-all shadow-xs cursor-pointer uppercase flex items-center gap-1"
+                title="Confirmar exclusão definitiva"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Sim, Apagar</span>
+              </button>
+              <button
+                onClick={() => setIsConfirmingDelete(false)}
+                className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-lg transition-all shadow-xs cursor-pointer uppercase flex items-center gap-1"
+                title="Cancelar exclusão"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Cancelar</span>
+              </button>
+            </div>
+          ) : (
+            <button
+              id={`delete-ticket-btn`}
+              onClick={() => {
+                if (currentUser.role === 'ADMIN') {
+                  setIsConfirmingDelete(true);
+                } else {
+                  alert('Apenas o perfil Administrador (ADMIN) possui permissão para apagar chamados do sistema.');
+                }
+              }}
+              disabled={currentUser.role !== 'ADMIN'}
+              title={currentUser.role === 'ADMIN' ? 'Apagar este chamado permanentemente' : 'Apenas o administrador do sistema pode apagar chamados'}
+              className={`px-3 py-2 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all select-none cursor-pointer h-[46px] sm:h-auto ${
+                currentUser.role === 'ADMIN'
+                  ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-600 hover:text-white hover:border-red-600 shadow-sm shadow-red-500/10'
+                  : 'bg-slate-100 text-slate-400 border-slate-200 opacity-60 cursor-not-allowed'
+              }`}
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Apagar Chamado</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -794,6 +949,141 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
               )}
             </div>
           </div>
+
+          {/* CARDS FOR REMINDERS (Tarefas Secundárias & Lembretes) */}
+          <div className="bg-white rounded-xl border border-slate-100 card-shadow overflow-hidden">
+            <div className="p-4 bg-slate-50/70 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.55">
+                <ListTodo className="w-4.5 h-4.5 text-indigo-700 shrink-0" />
+                <span>Lembretes &amp; Tarefas Operacionais</span>
+              </h3>
+              <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-150 px-2 py-0.5 rounded-full font-bold">
+                {(ticket.reminders?.filter((r) => r.completed).length || 0)}/{(ticket.reminders?.length || 0)} Concluídos
+              </span>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Form to add reminder */}
+              <form onSubmit={handleAddReminder} className="p-3 bg-slate-50 border border-slate-150 rounded-xl space-y-3">
+                <div className="text-[11px] font-black uppercase text-slate-550 tracking-wider">
+                  Adicionar tarefa secundária
+                </div>
+                <div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Contatar cliente ou testar amostra..."
+                    value={reminderText}
+                    onChange={(e) => setReminderText(e.target.value)}
+                    className="w-full px-2.5 py-1.5 border border-slate-250 rounded-lg text-xs placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-slate-800"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-slate-550 font-bold mb-1 uppercase">Prazo Limite</label>
+                    <input
+                      type="date"
+                      value={reminderDueDate}
+                      onChange={(e) => setReminderDueDate(e.target.value)}
+                      className="w-full px-2 py-1 border border-slate-250 rounded-lg text-xs bg-white text-slate-700 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-550 font-bold mb-1 uppercase">Prioridade</label>
+                    <select
+                      value={reminderPriority}
+                      onChange={(e) => setReminderPriority(e.target.value as any)}
+                      className="w-full px-2 py-1 border border-slate-250 rounded-lg text-xs bg-white text-slate-700 focus:outline-none"
+                    >
+                      <option value="Baixa">🟢 Baixa</option>
+                      <option value="Média">🟡 Média</option>
+                      <option value="Alta">🔴 Alta</option>
+                    </select>
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  className="w-full py-1.5 bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Incluir na Lista</span>
+                </button>
+              </form>
+
+              {/* List of existing reminders */}
+              {ticket.reminders && ticket.reminders.length > 0 ? (
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {ticket.reminders.map((reminder) => {
+                    const isOverdue = !reminder.completed && new Date(reminder.dueDate + 'T23:59:59').getTime() < Date.now();
+                    const priorityColor =
+                      reminder.priority === 'Alta'
+                        ? 'bg-rose-50 text-rose-700 border-rose-100'
+                        : reminder.priority === 'Média'
+                        ? 'bg-amber-50 text-amber-700 border-amber-100'
+                        : 'bg-slate-50 text-slate-600 border-slate-150';
+
+                    return (
+                      <div
+                        key={reminder.id}
+                        className={`p-2.5 rounded-xl border flex items-start justify-between gap-3 transition-all ${
+                          reminder.completed
+                            ? 'bg-slate-50/70 border-slate-100 opacity-65'
+                            : 'bg-white border-slate-250 shadow-2xs hover:border-slate-350'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={reminder.completed}
+                            onChange={() => handleToggleReminder(reminder.id)}
+                            className="mt-0.5 w-4 h-4 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500 cursor-pointer shrink-0"
+                            title="Marcar como concluído"
+                          />
+                          <div className="min-w-0">
+                            <p
+                              className={`text-xs font-semibold text-slate-700 break-words leading-tight ${
+                                reminder.completed ? 'line-through text-slate-400' : ''
+                              }`}
+                            >
+                              {reminder.text}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${priorityColor}`}>
+                                {reminder.priority}
+                              </span>
+                              
+                              <span className={`text-[10px] flex items-center gap-0.5 leading-none ${
+                                isOverdue ? 'text-rose-600 font-extrabold' : 'text-slate-450'
+                              }`}>
+                                <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                <span>Até: {new Date(reminder.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                                {isOverdue && <span className="text-[9px] uppercase tracking-wide ml-0.5 font-bold animate-pulse">(Atrasada)</span>}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveReminder(reminder.id)}
+                          className="text-slate-400 hover:text-red-600 p-1 rounded-md hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
+                          title="Excluir lembrete de tarefa"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-6 border border-dashed border-slate-200 rounded-xl">
+                  <ListTodo className="w-8 h-8 text-slate-300 mx-auto mb-1.5" />
+                  <p className="text-xs text-slate-400">Nenhum lembrete salvo para este chamado.</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Use o formulário acima para adicionar tarefas.</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* RIGHT COLUMN: Quality actions, 5 Whys analysis, or Interaction log */}
@@ -962,13 +1252,21 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                   </div>
 
                   {canModifyQuality ? (
-                    <button
-                      id="save-report-btn"
-                      type="submit"
-                      className="w-full py-2.5 font-bold text-xs text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg text-center transition-all shadow-sm uppercase cursor-pointer"
-                    >
-                      Salvar Relatório de Não Conformidade
-                    </button>
+                    <div className="space-y-2">
+                      {isDraftAutosaved && (
+                        <div className="flex items-center gap-1.5 text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-1.5 font-bold animate-pulse">
+                          <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>
+                          Rascunho recuperado / salvo automaticamente no navegador
+                        </div>
+                      )}
+                      <button
+                        id="save-report-btn"
+                        type="submit"
+                        className="w-full py-2.5 font-bold text-xs text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg text-center transition-all shadow-sm uppercase cursor-pointer"
+                      >
+                        Salvar Relatório de Não Conformidade
+                      </button>
+                    </div>
                   ) : (
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center text-xs text-slate-500">
                       🔒 {ticket.status === 'Finalizado' 
@@ -1045,23 +1343,31 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                   </div>
 
                   {/* Add action message comment form */}
-                  <form onSubmit={handleCommentSubmit} className="flex gap-2">
-                    <input
-                      id="comment-input"
-                      type="text"
-                      placeholder="Deixe uma mensagem ou observação..."
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                      id="submit-comment-btn"
-                      type="submit"
-                      className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-lg uppercase cursor-pointer"
-                    >
-                      Enviar
-                    </button>
-                  </form>
+                  <div className="space-y-1">
+                    <form onSubmit={handleCommentSubmit} className="flex gap-2">
+                      <input
+                        id="comment-input"
+                        type="text"
+                        placeholder="Deixe uma mensagem ou observação..."
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        className="flex-1 px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        id="submit-comment-btn"
+                        type="submit"
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-lg uppercase cursor-pointer"
+                      >
+                        Enviar
+                      </button>
+                    </form>
+                    {newComment.trim() && (
+                      <span className="text-[10px] text-indigo-600 font-bold flex items-center gap-1 pl-1.5 animate-pulse">
+                        <span className="w-1 h-1 bg-indigo-500 rounded-full"></span>
+                        Digitando... Rascunho salvo no navegador
+                      </span>
+                    )}
+                  </div>
                 </div>
 
               </div>

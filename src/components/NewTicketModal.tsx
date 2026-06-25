@@ -28,7 +28,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   issueTypes,
 }) => {
   const [productCode, setProductCode] = useState(products[0]?.code || 'CUSTOM');
-  const [customProductName, setCustomProductName] = useState(products[0]?.name || 'Leite Condensado Estrela 395g');
+  const [customProductName, setCustomProductName] = useState(products[0]?.name || '');
   const [batch, setBatch] = useState('');
   const [clientName, setClientName] = useState('');
   
@@ -42,6 +42,24 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   const [defects, setDefects] = useState<TicketDefect[]>([]);
   const [newDefectDesc, setNewDefectDesc] = useState('');
   const [newDefectQty, setNewDefectQty] = useState<number>(5);
+
+  // Sync state with open status & empty lists
+  React.useEffect(() => {
+    if (isOpen) {
+      const firstProd = products[0];
+      setProductCode(firstProd?.code || 'CUSTOM');
+      setCustomProductName(firstProd?.name || '');
+      setBatch('');
+      setClientName('');
+      setIssueType(issueTypes[0]?.name || 'Defeito');
+      setSubCategory(issueTypes[0]?.subcategories[0] || '');
+      setQuantity(1);
+      setDescription('');
+      setDefects([]);
+      setNewDefectDesc('');
+      setNewDefectQty(5);
+    }
+  }, [isOpen, products, issueTypes]);
 
   if (!isOpen) return null;
 

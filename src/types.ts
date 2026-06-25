@@ -73,6 +73,15 @@ export interface TicketDefect {
   quantity: number;
 }
 
+export interface TicketReminder {
+  id: string;
+  text: string;
+  dueDate: string;
+  priority: 'Baixa' | 'Média' | 'Alta';
+  completed: boolean;
+  createdAt: string;
+}
+
 export interface Ticket {
   id: string;
   tenantId: string; // SaaS support
@@ -93,6 +102,7 @@ export interface Ticket {
   comments: TicketComment[];
   qualityReport?: QualityReport;
   defects?: TicketDefect[];
+  reminders?: TicketReminder[];
   history: HistoryStep[];
 }
 
@@ -112,5 +122,7 @@ export interface SystemEmailLog {
 export interface Product {
   code: string; // SKU code
   name: string; // Descriptive name
+  producedQty?: number; // Total quantity produced
+  line?: string; // Product line (e.g., "Novara")
 }
 
