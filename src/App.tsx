@@ -361,6 +361,9 @@ export default function App() {
     quantity: number;
     description: string;
     defects?: { id: string; description: string; quantity: number }[];
+    firstContactDate?: string;
+    invoiceNumber?: string;
+    items?: { id: string; productCode: string; productName: string; quantity: number }[];
   }) => {
     if (!currentUser) return;
 
@@ -377,7 +380,7 @@ export default function App() {
       userId: currentUser.id,
       userName: currentUser.name,
       userRole: currentUser.role,
-      details: `SAC registrou devolução de ${data.quantity} unidades de ${data.productName} por motivo de ${data.issueType}${data.subCategory ? ` (${data.subCategory})` : ''}. Lote: ${data.batch}`,
+      details: `SAC registrou devolução de ${data.quantity} unidades (${data.items && data.items.length > 1 ? `${data.items.length} SKUs` : data.productName}) por motivo de ${data.issueType}${data.subCategory ? ` (${data.subCategory})` : ''}. Lote: ${data.batch}`,
       timestamp,
     };
 
@@ -401,6 +404,9 @@ export default function App() {
       comments: [],
       defects: data.defects || [],
       history: [newHist],
+      firstContactDate: data.firstContactDate,
+      invoiceNumber: data.invoiceNumber,
+      items: data.items,
     };
 
     setTickets((prev) => [newTicket, ...prev]);

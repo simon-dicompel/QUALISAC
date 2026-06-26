@@ -57,13 +57,25 @@ export const TicketList: React.FC<TicketListProps> = ({
     const sQuery = searchQuery.toLowerCase();
     const gQuery = globalSearchTerm.toLowerCase();
 
+    const matchesItemsLocal = ticket.items?.some(it => 
+      it.productCode.toLowerCase().includes(sQuery) || 
+      it.productName.toLowerCase().includes(sQuery)
+    );
+
     const matchesLocalSearch =
       !sQuery ||
       ticket.id.toLowerCase().includes(sQuery) ||
       ticket.productCode.toLowerCase().includes(sQuery) ||
       ticket.productName.toLowerCase().includes(sQuery) ||
       ticket.clientName.toLowerCase().includes(sQuery) ||
-      ticket.batch.toLowerCase().includes(sQuery);
+      (ticket.invoiceNumber && ticket.invoiceNumber.toLowerCase().includes(sQuery)) ||
+      ticket.batch.toLowerCase().includes(sQuery) ||
+      matchesItemsLocal;
+
+    const matchesItemsGlobal = ticket.items?.some(it => 
+      it.productCode.toLowerCase().includes(gQuery) || 
+      it.productName.toLowerCase().includes(gQuery)
+    );
 
     const matchesGlobalSearch =
       !gQuery ||
@@ -71,7 +83,9 @@ export const TicketList: React.FC<TicketListProps> = ({
       ticket.productCode.toLowerCase().includes(gQuery) ||
       ticket.productName.toLowerCase().includes(gQuery) ||
       ticket.clientName.toLowerCase().includes(gQuery) ||
-      ticket.batch.toLowerCase().includes(gQuery);
+      (ticket.invoiceNumber && ticket.invoiceNumber.toLowerCase().includes(gQuery)) ||
+      ticket.batch.toLowerCase().includes(gQuery) ||
+      matchesItemsGlobal;
 
     const matchesStatus = statusFilter === 'all' || ticket.status === statusFilter;
     const matchesType = typeFilter === 'all' || ticket.issueType === typeFilter;
@@ -369,7 +383,12 @@ export const TicketList: React.FC<TicketListProps> = ({
                   className={`table-row border-b border-slate-100 transition-colors cursor-pointer text-sm ${getIssueColorLeftBorder(ticket.issueType)}`}
                 >
                   <td className="px-6 py-4 font-mono font-bold text-slate-900 group-hover:text-blue-600">
-                    {ticket.id}
+                    <div>{ticket.id}</div>
+                    {ticket.invoiceNumber && (
+                      <div className="text-[10px] text-slate-400 font-normal mt-0.5" title="Número da Nota Fiscal">
+                        NF: {ticket.invoiceNumber}
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <div className="font-semibold text-slate-800">{ticket.clientName}</div>
@@ -390,8 +409,30 @@ export const TicketList: React.FC<TicketListProps> = ({
                     )}
                   </td>
                   <td className="px-6 py-4">
-                    <div className="font-medium text-slate-800">{ticket.productName}</div>
-                    <div className="text-[11px] text-slate-500 font-mono">Cód: {ticket.productCode}</div>
+                    {ticket.items && ticket.items.length > 1 ? (
+                      <div className="space-y-1">
+                        <div className="font-semibold text-blue-700 text-[10px] flex items-center gap-1 bg-blue-50 border border-blue-150 px-2 py-0.5 rounded-md w-max font-mono">
+                          📦 {ticket.items.length} SKUs no Chamado
+                        </div>
+                        <div className="text-[10px] text-slate-500 max-h-16 overflow-y-auto space-y-0.5">
+                          {ticket.items.slice(0, 3).map((it, idx) => (
+                            <p key={it.id || idx} className="truncate" title={`${it.productCode}: ${it.productName}`}>
+                              <span className="font-mono font-bold text-slate-700">{it.productCode}</span>: {it.quantity} un
+                            </p>
+                          ))}
+                          {ticket.items.length > 3 && (
+                            <p className="text-[9.5px] text-slate-400 italic">
+                              + {ticket.items.length - 3} SKU(s)...
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="font-medium text-slate-800 line-clamp-2" title={ticket.productName}>{ticket.productName}</div>
+                        <div className="text-[11px] text-slate-500 font-mono">Cód: {ticket.productCode}</div>
+                      </>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <span className="font-mono bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-0.5 rounded text-xs">

@@ -73,6 +73,13 @@ export interface TicketDefect {
   quantity: number;
 }
 
+export interface TicketItem {
+  id: string;
+  productCode: string;
+  productName: string;
+  quantity: number;
+}
+
 export interface TicketReminder {
   id: string;
   text: string;
@@ -104,6 +111,9 @@ export interface Ticket {
   defects?: TicketDefect[];
   reminders?: TicketReminder[];
   history: HistoryStep[];
+  firstContactDate?: string; // Data do primeiro contato do cliente
+  invoiceNumber?: string; // Número da nota fiscal
+  items?: TicketItem[];
 }
 
 export interface SystemEmailLog {

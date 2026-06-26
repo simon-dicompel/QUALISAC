@@ -131,6 +131,8 @@ export const INITIAL_TICKETS: Ticket[] = [
     updatedAt: '2026-05-18T16:00:00Z',
     userId: 'user_sac',
     userName: 'Juliana Souza',
+    firstContactDate: '2026-05-14',
+    invoiceNumber: 'NF-89241',
     files: [
       {
         id: 'file_1',
@@ -264,6 +266,8 @@ export const INITIAL_TICKETS: Ticket[] = [
     updatedAt: '2026-06-03T09:10:00Z',
     userId: 'user_sac',
     userName: 'Juliana Souza',
+    firstContactDate: '2026-06-01',
+    invoiceNumber: 'NF-76541',
     files: [
       {
         id: 'file_3',

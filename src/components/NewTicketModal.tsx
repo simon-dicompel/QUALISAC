@@ -15,6 +15,9 @@ interface NewTicketModalProps {
     quantity: number;
     description: string;
     defects?: TicketDefect[];
+    firstContactDate?: string;
+    invoiceNumber?: string;
+    items?: { id: string; productCode: string; productName: string; quantity: number }[];
   }) => void;
   products: Product[];
   issueTypes: IssueTypeCategory[];
@@ -31,6 +34,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   const [customProductName, setCustomProductName] = useState(products[0]?.name || '');
   const [batch, setBatch] = useState('');
   const [clientName, setClientName] = useState('');
+  const [firstContactDate, setFirstContactDate] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState('');
   
   const [issueType, setIssueType] = useState<string>(issueTypes[0]?.name || 'Defeito');
   const [subCategory, setSubCategory] = useState<string>(issueTypes[0]?.subcategories[0] || '');
@@ -43,6 +48,9 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   const [newDefectDesc, setNewDefectDesc] = useState('');
   const [newDefectQty, setNewDefectQty] = useState<number>(5);
 
+  // Multiple items/SKUs state
+  const [itemsList, setItemsList] = useState<{ id: string; productCode: string; productName: string; quantity: number }[]>([]);
+
   // Sync state with open status & empty lists
   React.useEffect(() => {
     if (isOpen) {
@@ -51,6 +59,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
       setCustomProductName(firstProd?.name || '');
       setBatch('');
       setClientName('');
+      setFirstContactDate('');
+      setInvoiceNumber('');
       setIssueType(issueTypes[0]?.name || 'Defeito');
       setSubCategory(issueTypes[0]?.subcategories[0] || '');
       setQuantity(1);
@@ -58,6 +68,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
       setDefects([]);
       setNewDefectDesc('');
       setNewDefectQty(5);
+      setItemsList([]);
     }
   }, [isOpen, products, issueTypes]);
 
@@ -88,27 +99,51 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   const handleSubmitForm = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!batch.trim() || !clientName.trim() || !customProductName.trim() || !description.trim()) {
+    const hasItems = itemsList.length > 0;
+
+    if (!batch.trim() || !clientName.trim() || !description.trim()) {
       alert('Por favor, preencha todos os campos obrigatórios do formulário.');
       return;
     }
 
-    if (quantity <= 0) {
-      alert('A quantidade deve ser de pelo menos 1 unidade.');
+    if (!hasItems && !customProductName.trim()) {
+      alert('Por favor, selecione ou digite o nome do produto.');
       return;
     }
 
+    const finalItems = hasItems ? itemsList : [
+      {
+        id: `item_${Date.now()}`,
+        productCode: productCode === 'CUSTOM' ? 'PROD-CUSTOM' : productCode,
+        productName: customProductName,
+        quantity: quantity,
+      }
+    ];
+
+    const finalQuantity = finalItems.reduce((sum, item) => sum + item.quantity, 0);
+
+    if (finalQuantity <= 0) {
+      alert('A quantidade total devolvida deve ser de pelo menos 1 unidade.');
+      return;
+    }
+
+    const finalCode = finalItems.length === 1 ? finalItems[0].productCode : 'MULTIPLE';
+    const finalName = finalItems.length === 1 ? finalItems[0].productName : `${finalItems.length} SKUs no mesmo chamado`;
+
     onSubmit({
-      productCode: productCode === 'CUSTOM' ? 'PROD-CUSTOM' : productCode,
-      productName: customProductName,
+      productCode: finalCode,
+      productName: finalName,
       batch,
       clientName,
       issueType,
       subCategory,
-      quantity,
+      quantity: finalQuantity,
       description,
+      firstContactDate: firstContactDate.trim() || undefined,
+      invoiceNumber: invoiceNumber.trim() || undefined,
+      items: finalItems,
       defects: defects.length > 0 ? defects : [
-        { id: `def_${Date.now()}`, description: description.substring(0, 50), quantity }
+        { id: `def_${Date.now()}`, description: description.substring(0, 50), quantity: finalQuantity }
       ],
     });
 
@@ -117,6 +152,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
     setCustomProductName(products[0]?.name || '');
     setBatch('');
     setClientName('');
+    setFirstContactDate('');
+    setInvoiceNumber('');
     setIssueType(issueTypes[0]?.name || 'Defeito');
     setSubCategory(issueTypes[0]?.subcategories[0] || '');
     setQuantity(1);
@@ -124,6 +161,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
     setDefects([]);
     setNewDefectDesc('');
     setNewDefectQty(5);
+    setItemsList([]);
     
     onClose();
   };
@@ -149,37 +187,140 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
         {/* Modal Form */}
         <form onSubmit={handleSubmitForm} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           
-          {/* Predefined product select & custom product name */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Cód. SKU do Produto *</label>
-              <select
-                id="modal-product-select"
-                value={productCode}
-                onChange={(e) => handleProductSelect(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {products.map((p) => (
-                  <option key={p.code} value={p.code}>
-                    🏷️ {p.code} ({p.name.substring(0, 30)}...)
-                  </option>
-                ))}
-                <option value="CUSTOM">🆕 Outro (Digitar personalizado)</option>
-              </select>
+          {/* Multiple Products Section / Consolidado */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+            <div className="flex justify-between items-center">
+              <div>
+                <span className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">Produtos / SKUs Devolvidos *</span>
+                <span className="text-[9.5px] text-slate-500">Adicione um ou mais SKUs para registrar no mesmo chamado</span>
+              </div>
+              {itemsList.length > 0 && (
+                <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                  {itemsList.length} SKU(s) adicionado(s)
+                </span>
+              )}
             </div>
 
-            <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Nome Descritivo do Produto *</label>
-              <input
-                id="modal-product-name-input"
-                type="text"
-                disabled={productCode !== 'CUSTOM'}
-                placeholder="Ex: Embalagem Alumínio 5kg"
-                value={customProductName}
-                onChange={(e) => setCustomProductName(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50"
-              />
+            {/* Selector and Inputs for item */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-end">
+              <div className="md:col-span-4">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Selecione o Produto</label>
+                <select
+                  id="modal-product-select"
+                  value={productCode}
+                  onChange={(e) => handleProductSelect(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-slate-250 rounded-lg text-xs bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {products.map((p) => (
+                    <option key={p.code} value={p.code}>
+                      🏷️ {p.code} ({p.name.substring(0, 20)}...)
+                    </option>
+                  ))}
+                  <option value="CUSTOM">🆕 Outro (Digitar personalizado)</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-5">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Nome do Produto</label>
+                <input
+                  id="modal-product-name-input"
+                  type="text"
+                  disabled={productCode !== 'CUSTOM'}
+                  placeholder="Ex: Embalagem Alumínio 5kg"
+                  value={customProductName}
+                  onChange={(e) => setCustomProductName(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Qtd Devol.</label>
+                <input
+                  id="modal-item-quantity"
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full px-2.5 py-1.5 border border-slate-250 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="md:col-span-1">
+                <button
+                  type="button"
+                  title="Adicionar SKU ao chamado"
+                  onClick={() => {
+                    if (!customProductName.trim()) {
+                      alert('Por favor, informe o nome do produto.');
+                      return;
+                    }
+                    const sku = productCode === 'CUSTOM' ? 'PROD-CUSTOM' : productCode;
+                    
+                    // Check if already in itemsList
+                    if (itemsList.some(item => item.productCode === sku)) {
+                      alert('Este SKU já foi adicionado ao chamado. Você pode remover o existente e adicionar novamente com a nova quantidade.');
+                      return;
+                    }
+
+                    const item = {
+                      id: `item_${Date.now()}`,
+                      productCode: sku,
+                      productName: customProductName,
+                      quantity: quantity,
+                    };
+                    setItemsList((prev) => [...prev, item]);
+                    
+                    // Reset single selection inputs
+                    const nextProd = products[0];
+                    setProductCode(nextProd?.code || 'CUSTOM');
+                    setCustomProductName(nextProd?.name || '');
+                    setQuantity(1);
+                  }}
+                  className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold flex items-center justify-center transition-colors cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
             </div>
+
+            {/* List of current SKUs in itemsList */}
+            {itemsList.length > 0 ? (
+              <div className="space-y-1.5 pt-2 border-t border-slate-200 max-h-40 overflow-y-auto">
+                {itemsList.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between gap-2 p-2 rounded bg-white hover:bg-slate-50 border border-slate-150 text-xs animate-in fade-in duration-100">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">
+                          {item.productCode}
+                        </span>
+                        <span className="text-slate-700 truncate font-medium text-[11px]">{item.productName}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded text-[10.5px]">
+                        {item.quantity} un
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setItemsList((prev) => prev.filter((it) => it.id !== item.id));
+                        }}
+                        className="p-1 hover:bg-slate-100 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <div className="text-[10.5px] text-right font-semibold text-slate-600 pt-1">
+                  Total de SKUs Acumulados: <strong className="font-black text-xs text-blue-600">{itemsList.reduce((sum, i) => sum + i.quantity, 0)}</strong> unidades
+                </div>
+              </div>
+            ) : (
+              <p className="text-[10px] text-slate-500 italic text-center py-1">
+                Nenhum SKU extra na lista. Ao salvar agora, o SKU inserido nos campos acima ({quantity} un) será o único registrado.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -205,6 +346,33 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                 placeholder="Razão Social ou Nome Fantasia"
                 value={clientName}
                 onChange={(e) => setClientName(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Data do Primeiro Contato */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Data do Primeiro Contato</label>
+              <input
+                id="modal-first-contact-date-input"
+                type="date"
+                value={firstContactDate}
+                onChange={(e) => setFirstContactDate(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Número da Nota Fiscal */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Número da Nota Fiscal</label>
+              <input
+                id="modal-invoice-number-input"
+                type="text"
+                placeholder="Ex: NF-123456"
+                value={invoiceNumber}
+                onChange={(e) => setInvoiceNumber(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -250,14 +418,20 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
             {/* Quantity */}
             <div>
               <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Quant. Afetada *</label>
-              <input
-                id="modal-quantity"
-                type="number"
-                min="1"
-                value={quantity}
-                onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              {itemsList.length > 0 ? (
+                <div className="w-full px-3 py-2 border border-slate-200 bg-slate-100 rounded-lg text-xs font-bold text-slate-700 h-[34px] flex items-center">
+                  📦 {itemsList.reduce((sum, item) => sum + item.quantity, 0)} un (Soma dos SKUs)
+                </div>
+              ) : (
+                <input
+                  id="modal-quantity"
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              )}
             </div>
           </div>
 

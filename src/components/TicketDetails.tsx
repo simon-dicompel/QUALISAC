@@ -396,17 +396,51 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
             <h2 className="text-xs font-bold bg-slate-100 px-2 py-1 uppercase text-slate-800 border-l-4 border-slate-800 font-mono">
               1. Identificação do Desvio e Dados de Entrada
             </h2>
-            <div className="grid grid-cols-2 gap-4 border border-slate-300 p-3 rounded">
-              <div className="space-y-1">
-                <p className="text-slate-600"><span className="font-bold">Cliente / Reclamante:</span> {ticket.clientName}</p>
-                <p className="text-slate-600"><span className="font-bold">Produto:</span> {ticket.productName}</p>
-                <p className="text-slate-600"><span className="font-bold">Código SKU:</span> {ticket.productCode}</p>
+            <div className="border border-slate-300 p-3 rounded space-y-3">
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div className="space-y-1">
+                  <p className="text-slate-600"><span className="font-bold">Cliente / Reclamante:</span> {ticket.clientName}</p>
+                  <p className="text-slate-600"><span className="font-bold">Produto Principal:</span> {ticket.productName}</p>
+                  <p className="text-slate-600"><span className="font-bold">Código SKU:</span> {ticket.productCode}</p>
+                  <p className="text-slate-600"><span className="font-bold">Nota Fiscal:</span> {ticket.invoiceNumber || 'Não informada'}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-slate-600"><span className="font-bold">Lote Rastreável (Batch):</span> {ticket.batch}</p>
+                  <p className="text-slate-600"><span className="font-bold">Qtd Afetada / Devolvida:</span> {ticket.quantity} unidades</p>
+                  <p className="text-slate-600"><span className="font-bold">Classificação da Ocorrência:</span> {ticket.issueType}{ticket.subCategory ? ` - ${ticket.subCategory}` : ''}</p>
+                  <p className="text-slate-600"><span className="font-bold">Data 1º Contato:</span> {ticket.firstContactDate ? new Date(ticket.firstContactDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Não informada'}</p>
+                </div>
               </div>
-              <div className="space-y-1">
-                <p className="text-slate-600"><span className="font-bold">Lote Rastreável (Batch):</span> {ticket.batch}</p>
-                <p className="text-slate-600"><span className="font-bold">Qtd Afetada / Devolvida:</span> {ticket.quantity} unidades</p>
-                <p className="text-slate-600"><span className="font-bold">Classificação da Ocorrência:</span> {ticket.issueType}{ticket.subCategory ? ` - ${ticket.subCategory}` : ''}</p>
-              </div>
+
+              {ticket.items && ticket.items.length > 0 && (
+                <div className="border-t border-slate-200 pt-3">
+                  <span className="font-bold text-[10px] text-slate-800 uppercase font-mono block mb-1.5">Lista Completa de SKUs Devolvidos neste Chamado:</span>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse border border-slate-300 text-[10px] text-left">
+                      <thead>
+                        <tr className="bg-slate-50">
+                          <th className="border border-slate-300 p-1.5 font-bold">Código SKU</th>
+                          <th className="border border-slate-300 p-1.5 font-bold">Nome do Produto</th>
+                          <th className="border border-slate-300 p-1.5 font-bold text-center w-28">Quantidade</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ticket.items.map((item) => (
+                          <tr key={item.id} className="hover:bg-slate-55">
+                            <td className="border border-slate-300 p-1.5 font-mono font-bold text-slate-900">{item.productCode}</td>
+                            <td className="border border-slate-300 p-1.5 text-slate-700">{item.productName}</td>
+                            <td className="border border-slate-300 p-1.5 text-center font-bold font-mono text-slate-800">{item.quantity} un</td>
+                          </tr>
+                        ))}
+                        <tr className="bg-slate-100 font-bold">
+                          <td colSpan={2} className="border border-slate-300 p-1.5 text-right text-slate-700">Quantidade Total Combinada:</td>
+                          <td className="border border-slate-300 p-1.5 text-center font-mono text-blue-700 font-bold">{ticket.items.reduce((sum, item) => sum + item.quantity, 0)} un</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -631,9 +665,21 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
               <h3 className="font-black text-[9px] uppercase tracking-wider text-slate-500 mb-1">Remetente (Cliente original)</h3>
               <p className="font-bold text-slate-850 text-xs">{ticket.clientName}</p>
               <div className="text-[10px] text-slate-600 mt-1 space-y-0.5">
-                <p><span className="font-bold">NF / ID SAC:</span> {ticket.id}</p>
+                <p><span className="font-bold">ID SAC:</span> {ticket.id}</p>
+                <p><span className="font-bold">Nota Fiscal:</span> {ticket.invoiceNumber || 'Não informada'}</p>
                 <p><span className="font-bold">Lote:</span> {ticket.batch}</p>
-                <p><span className="font-bold">Item:</span> {ticket.productCode} - {ticket.productName.substring(0, 30)}</p>
+                {ticket.items && ticket.items.length > 0 ? (
+                  <div className="mt-1 pt-1 border-t border-slate-100 space-y-0.5">
+                    <span className="font-bold text-[9px] text-slate-500 uppercase tracking-wider block">Itens Devolvidos ({ticket.items.length}):</span>
+                    {ticket.items.map((it, idx) => (
+                      <p key={it.id || idx} className="text-[9px] text-slate-700 font-mono">
+                        • {it.productCode} ({it.quantity} un)
+                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  <p><span className="font-bold">Item:</span> {ticket.productCode} - {ticket.productName.substring(0, 30)}</p>
+                )}
               </div>
             </div>
 
@@ -825,6 +871,18 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 <div>
                   <label className="text-[11px] font-bold text-slate-400 uppercase">Faturamento (Qtd Devolvida)</label>
                   <p className="text-sm font-bold text-slate-800 mt-0.5">{ticket.quantity} unidades</p>
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Data do 1º Contato</label>
+                  <p className="text-sm font-bold text-slate-800 mt-0.5">
+                    {ticket.firstContactDate ? new Date(ticket.firstContactDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Não informada'}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Número da Nota Fiscal</label>
+                  <p className="font-mono text-sm font-bold text-slate-800 mt-0.5">
+                    {ticket.invoiceNumber || 'Não informada'}
+                  </p>
                 </div>
               </div>
 
