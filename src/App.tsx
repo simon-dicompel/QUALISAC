@@ -1179,6 +1179,7 @@ export default function App() {
                   <DashboardView 
                     tickets={activeTenantTickets} 
                     products={products}
+                    activeTenant={activeTenant}
                     onNavigateToTickets={(status) => {
                       setDashboardStatusFilter(status || 'all');
                       setActiveMenu('chamados');

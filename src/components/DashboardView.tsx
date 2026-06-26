@@ -1,5 +1,5 @@
 import React from 'react';
-import { Ticket, IssueType, TicketStatus, Product } from '../types';
+import { Ticket, IssueType, TicketStatus, Product, Tenant } from '../types';
 import {
   ResponsiveContainer,
   PieChart,
@@ -34,17 +34,29 @@ import {
   Search,
   CheckSquare,
   Square,
+  RefreshCw,
 } from 'lucide-react';
 
 interface DashboardViewProps {
   tickets: Ticket[];
   products: Product[];
   onNavigateToTickets?: (status?: string) => void;
+  activeTenant: Tenant;
 }
 
-export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products = [], onNavigateToTickets }) => {
+export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products = [], onNavigateToTickets, activeTenant }) => {
   const [selectedProductCode, setSelectedProductCode] = React.useState<string>('');
   const [selectedMonthlyIssueType, setSelectedMonthlyIssueType] = React.useState<string>('all');
+  const [isRefreshing, setIsRefreshing] = React.useState<boolean>(false);
+  const [refreshTrigger, setRefreshTrigger] = React.useState<number>(0);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    setRefreshTrigger((prev) => prev + 1);
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 600);
+  };
 
   // Portuguese months
   const monthNames = React.useMemo(() => ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'], []);
@@ -115,7 +127,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
         Fechados: monthsMap[key].closed,
       };
     });
-  }, [tickets, selectedMonthlyIssueType, monthNames]);
+  }, [tickets, selectedMonthlyIssueType, monthNames, refreshTrigger]);
 
   // Calculate devolution percentage per product
   const productDevolutionStats = React.useMemo(() => {
@@ -134,7 +146,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
         percentageDevolved: parseFloat(percentageDevolved.toFixed(4)),
       };
     }).sort((a, b) => b.percentageDevolved - a.percentageDevolved);
-  }, [tickets, products]);
+  }, [tickets, products, refreshTrigger]);
 
   // Calculate open tickets devolution percentage per product
   const productOpenDevolutionStats = React.useMemo(() => {
@@ -153,7 +165,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
         percentageOpenDevolved: parseFloat(percentageOpenDevolved.toFixed(4)),
       };
     }).sort((a, b) => b.percentageOpenDevolved - a.percentageOpenDevolved);
-  }, [tickets, products]);
+  }, [tickets, products, refreshTrigger]);
 
   // Calculate monthly trend of production return rate (returned units / total produced units)
   const monthlyReturnRateTrend = React.useMemo(() => {
@@ -239,7 +251,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
         isReal: true,
       };
     });
-  }, [tickets, products, monthNames]);
+  }, [tickets, products, monthNames, refreshTrigger]);
 
   // Calculate dynamics of the return rate trend
   const trendInsights = React.useMemo(() => {
@@ -455,7 +467,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
 
       return true;
     });
-  }, [tickets, products, repStatus, repIssueType, repProductLine, repSearch]);
+  }, [tickets, products, repStatus, repIssueType, repProductLine, repSearch, refreshTrigger]);
 
   // Generate and Download Custom Report Handler
   const handleDownloadCustomReport = () => {
@@ -722,6 +734,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
 
   return (
     <div className="space-y-6">
+      {/* Printable Header - Visible ONLY when printing */}
+      <div className="hidden print:block border-b-2 border-slate-300 pb-4 mb-6">
+        <div className="flex justify-between items-end">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">QualiSAC - Gestão de Não Conformidades ISO 9001</h1>
+            <p className="text-xs text-slate-600 mt-1 font-semibold">
+              Locatário Ativo: <span className="font-bold text-slate-800">{activeTenant.name}</span> ({activeTenant.plan} Plan &bull; {activeTenant.status})
+            </p>
+          </div>
+          <div className="text-right text-[10px] text-slate-500 font-mono">
+            <p>Gerado em: {new Date().toLocaleString('pt-BR')}</p>
+            <p>Total de Ocorrências: {total}</p>
+          </div>
+        </div>
+      </div>
+
       {/* Dashboard Top Header & CSV Export */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 no-print">
         <div className="min-w-0">
@@ -734,6 +762,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
           </p>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-lg transition-all shadow-xs cursor-pointer uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Recalcular métricas e atualizar indicadores do dashboard"
+          >
+            <RefreshCw className={`w-4 h-4 text-white ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Atualizando...' : 'Atualizar Dashboard'}</span>
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-all shadow-xs cursor-pointer uppercase"
+            title="Imprimir ou exportar o dashboard consolidado do locatário em formato PDF"
+          >
+            <Printer className="w-4 h-4 text-white" />
+            <span>Exportar Dashboard PDF</span>
+          </button>
           <button
             onClick={handleExportIndicators}
             className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-all shadow-xs cursor-pointer uppercase"
