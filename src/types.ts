@@ -94,7 +94,7 @@ export interface Ticket {
   tenantId: string; // SaaS support
   productCode: string;
   productName: string;
-  batch: string; // Lote
+  batch?: string; // Lote (opcional)
   clientName: string;
   issueType: IssueType;
   subCategory?: string;
@@ -114,6 +114,12 @@ export interface Ticket {
   firstContactDate?: string; // Data do primeiro contato do cliente
   invoiceNumber?: string; // Número da nota fiscal
   items?: TicketItem[];
+  // Novos campos específicos
+  reseller?: string; // Revenda
+  consumer?: string; // Consumidor
+  shippingValue?: number; // Valor Frete
+  requestedReversePac?: string; // Solicitado PAC Reverso (Ex: 'Sim' | 'Não')
+  registeredUf?: string; // UF cadastrado
 }
 
 export interface SystemEmailLog {

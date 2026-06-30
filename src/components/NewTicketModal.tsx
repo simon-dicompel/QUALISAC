@@ -8,7 +8,7 @@ interface NewTicketModalProps {
   onSubmit: (data: {
     productCode: string;
     productName: string;
-    batch: string;
+    batch?: string;
     clientName: string;
     issueType: string;
     subCategory: string;
@@ -18,9 +18,16 @@ interface NewTicketModalProps {
     firstContactDate?: string;
     invoiceNumber?: string;
     items?: { id: string; productCode: string; productName: string; quantity: number }[];
+    // Novos campos específicos para Chamado Especial
+    reseller?: string;
+    consumer?: string;
+    shippingValue?: number;
+    requestedReversePac?: string;
+    registeredUf?: string;
   }) => void;
   products: Product[];
   issueTypes: IssueTypeCategory[];
+  isSpecial?: boolean;
 }
 
 export const NewTicketModal: React.FC<NewTicketModalProps> = ({
@@ -29,6 +36,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   onSubmit,
   products,
   issueTypes,
+  isSpecial = false,
 }) => {
   const [productCode, setProductCode] = useState(products[0]?.code || 'CUSTOM');
   const [customProductName, setCustomProductName] = useState(products[0]?.name || '');
@@ -51,6 +59,13 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   // Multiple items/SKUs state
   const [itemsList, setItemsList] = useState<{ id: string; productCode: string; productName: string; quantity: number }[]>([]);
 
+  // Estados dos novos campos específicos
+  const [reseller, setReseller] = useState('');
+  const [consumer, setConsumer] = useState('');
+  const [shippingValue, setShippingValue] = useState('');
+  const [requestedReversePac, setRequestedReversePac] = useState('Não');
+  const [registeredUf, setRegisteredUf] = useState('SC'); // Default to SC for Simon Dicompel or blank
+
   // Sync state with open status & empty lists
   React.useEffect(() => {
     if (isOpen) {
@@ -69,6 +84,13 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
       setNewDefectDesc('');
       setNewDefectQty(5);
       setItemsList([]);
+      
+      // Reset special fields
+      setReseller('');
+      setConsumer('');
+      setShippingValue('');
+      setRequestedReversePac('Não');
+      setRegisteredUf('SC');
     }
   }, [isOpen, products, issueTypes]);
 
@@ -101,8 +123,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
 
     const hasItems = itemsList.length > 0;
 
-    if (!batch.trim() || !clientName.trim() || !description.trim()) {
-      alert('Por favor, preencha todos os campos obrigatórios do formulário.');
+    if (!clientName.trim() || !description.trim()) {
+      alert('Por favor, preencha todos os campos obrigatórios do formulário (Cliente e Descrição são obrigatórios).');
       return;
     }
 
@@ -133,7 +155,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
     onSubmit({
       productCode: finalCode,
       productName: finalName,
-      batch,
+      batch: batch.trim() || undefined,
       clientName,
       issueType,
       subCategory,
@@ -145,6 +167,12 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
       defects: defects.length > 0 ? defects : [
         { id: `def_${Date.now()}`, description: description.substring(0, 50), quantity: finalQuantity }
       ],
+      // Novos campos para Chamado Especial
+      reseller: isSpecial ? (reseller.trim() || undefined) : undefined,
+      consumer: isSpecial ? (consumer.trim() || undefined) : undefined,
+      shippingValue: isSpecial && shippingValue.trim() ? parseFloat(shippingValue) || 0 : undefined,
+      requestedReversePac: isSpecial ? requestedReversePac : undefined,
+      registeredUf: isSpecial ? registeredUf : undefined,
     });
 
     // Reset Form
@@ -168,13 +196,23 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl card-shadow border border-slate-100 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className={`bg-white rounded-xl card-shadow border border-slate-100 w-full ${isSpecial ? 'max-w-2xl' : 'max-w-lg'} overflow-hidden animate-in fade-in zoom-in-95 duration-200`}>
         
         {/* Modal Header */}
-        <div className="p-4.5 bg-slate-55 border-b border-slate-200 flex items-center justify-between">
+        <div className={`p-4.5 border-b border-slate-200 flex items-center justify-between ${isSpecial ? 'bg-indigo-50/40' : 'bg-slate-50'}`}>
           <div className="flex items-center gap-2">
-            <ClipboardList className="w-5 h-5 text-blue-600" />
-            <span className="font-bold text-slate-800 text-sm uppercase tracking-wider">Abertura de Chamado (SAC - Qualidade)</span>
+            <ClipboardList className={`w-5 h-5 ${isSpecial ? 'text-indigo-600' : 'text-blue-600'}`} />
+            <div>
+              <span className="font-extrabold text-slate-800 text-sm uppercase tracking-wider block">
+                {isSpecial ? 'Abertura de Chamado Especial' : 'Abertura de Chamado'}
+              </span>
+              <span className="text-[9.5px] text-slate-500 font-medium block">SAC - CONTROLE DE QUALIDADE SIMON DICOMPEL</span>
+            </div>
+            {isSpecial && (
+              <span className="ml-2 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md bg-indigo-100 text-indigo-700 border border-indigo-200 animate-pulse">
+                Especial
+              </span>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -326,11 +364,11 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Lote */}
             <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Lote de Identificação *</label>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Lote de Identificação (Opcional)</label>
               <input
                 id="modal-batch-input"
                 type="text"
-                placeholder="Ex: L-141225B"
+                placeholder="Ex: L-141225B (Opcional)"
                 value={batch}
                 onChange={(e) => setBatch(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -350,6 +388,90 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
               />
             </div>
           </div>
+
+          {/* Campos Especiais do Chamado */}
+          {isSpecial && (
+            <div className="bg-indigo-50/50 border border-indigo-150 p-4 rounded-xl space-y-4">
+              <div className="flex items-center gap-2 pb-1.5 border-b border-indigo-100">
+                <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full"></span>
+                <span className="text-[11px] font-black text-indigo-900 uppercase tracking-widest">Informações do Chamado Especial (SAC)</span>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Revenda */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Revenda</label>
+                  <input
+                    id="modal-reseller-input"
+                    type="text"
+                    placeholder="Nome da Revenda / Parceiro"
+                    value={reseller}
+                    onChange={(e) => setReseller(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                {/* Consumidor */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Consumidor</label>
+                  <input
+                    id="modal-consumer-input"
+                    type="text"
+                    placeholder="Nome do Consumidor Final"
+                    value={consumer}
+                    onChange={(e) => setConsumer(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Valor Frete */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Valor do Frete (R$)</label>
+                  <input
+                    id="modal-shipping-value-input"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0,00"
+                    value={shippingValue}
+                    onChange={(e) => setShippingValue(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                {/* Solicitado PAC Reverso */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Solicitado PAC Reverso?</label>
+                  <select
+                    id="modal-pac-reverso-select"
+                    value={requestedReversePac}
+                    onChange={(e) => setRequestedReversePac(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="Não">Não</option>
+                    <option value="Sim">Sim</option>
+                  </select>
+                </div>
+
+                {/* UF cadastrado */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">UF Cadastrado</label>
+                  <select
+                    id="modal-uf-select"
+                    value={registeredUf}
+                    onChange={(e) => setRegisteredUf(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'].map((uf) => (
+                      <option key={uf} value={uf}>{uf}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Data do Primeiro Contato */}

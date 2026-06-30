@@ -405,12 +405,58 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                   <p className="text-slate-600"><span className="font-bold">Nota Fiscal:</span> {ticket.invoiceNumber || 'Não informada'}</p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-slate-600"><span className="font-bold">Lote Rastreável (Batch):</span> {ticket.batch}</p>
+                  <p className="text-slate-600"><span className="font-bold">Lote Rastreável (Batch):</span> {ticket.batch || 'Não Informado'}</p>
                   <p className="text-slate-600"><span className="font-bold">Qtd Afetada / Devolvida:</span> {ticket.quantity} unidades</p>
                   <p className="text-slate-600"><span className="font-bold">Classificação da Ocorrência:</span> {ticket.issueType}{ticket.subCategory ? ` - ${ticket.subCategory}` : ''}</p>
                   <p className="text-slate-600"><span className="font-bold">Data 1º Contato:</span> {ticket.firstContactDate ? new Date(ticket.firstContactDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Não informada'}</p>
                 </div>
               </div>
+
+              {/* Campos Específicos para Chamado Especial */}
+              {(ticket.reseller || ticket.consumer || ticket.shippingValue !== undefined || ticket.requestedReversePac || ticket.registeredUf) && (
+                <div className="mt-3 pt-3 border-t border-slate-200">
+                  <div className="bg-indigo-50/50 border border-indigo-100 p-3 rounded-lg space-y-2">
+                    <span className="font-extrabold text-[10px] text-indigo-900 uppercase font-mono flex items-center gap-1.5">
+                      <span className="w-2 h-2 bg-indigo-600 rounded-full"></span>
+                      <span>Informações Adicionais do Chamado Especial:</span>
+                    </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-xs">
+                      {ticket.reseller && (
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-bold uppercase block">Revenda</span>
+                          <strong className="text-slate-800">{ticket.reseller}</strong>
+                        </div>
+                      )}
+                      {ticket.consumer && (
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-bold uppercase block">Consumidor</span>
+                          <strong className="text-slate-800">{ticket.consumer}</strong>
+                        </div>
+                      )}
+                      {ticket.shippingValue !== undefined && (
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-bold uppercase block">Valor Frete</span>
+                          <strong className="text-slate-800">
+                            R$ {ticket.shippingValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </strong>
+                        </div>
+                      )}
+                      {ticket.requestedReversePac && (
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-bold uppercase block">PAC Reverso Solicitado</span>
+                          <strong className="text-slate-800">{ticket.requestedReversePac}</strong>
+                        </div>
+                      )}
+                      {ticket.registeredUf && (
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-bold uppercase block">UF Cadastrado</span>
+                          <strong className="text-slate-800 uppercase">{ticket.registeredUf}</strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {ticket.items && ticket.items.length > 0 && (
                 <div className="border-t border-slate-200 pt-3">
@@ -667,7 +713,12 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
               <div className="text-[10px] text-slate-600 mt-1 space-y-0.5">
                 <p><span className="font-bold">ID SAC:</span> {ticket.id}</p>
                 <p><span className="font-bold">Nota Fiscal:</span> {ticket.invoiceNumber || 'Não informada'}</p>
-                <p><span className="font-bold">Lote:</span> {ticket.batch}</p>
+                <p><span className="font-bold">Lote:</span> {ticket.batch || 'Não Informado'}</p>
+                {ticket.reseller && <p><span className="font-bold">Revenda:</span> {ticket.reseller}</p>}
+                {ticket.consumer && <p><span className="font-bold">Consumidor:</span> {ticket.consumer}</p>}
+                {ticket.shippingValue !== undefined && <p><span className="font-bold">Frete:</span> R$ {ticket.shippingValue.toFixed(2)}</p>}
+                {ticket.requestedReversePac && <p><span className="font-bold">PAC Reverso:</span> {ticket.requestedReversePac}</p>}
+                {ticket.registeredUf && <p><span className="font-bold">UF:</span> {ticket.registeredUf}</p>}
                 {ticket.items && ticket.items.length > 0 ? (
                   <div className="mt-1 pt-1 border-t border-slate-100 space-y-0.5">
                     <span className="font-bold text-[9px] text-slate-500 uppercase tracking-wider block">Itens Devolvidos ({ticket.items.length}):</span>
@@ -860,7 +911,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-slate-400 uppercase">Lote (Rastreável)</label>
-                  <p className="font-mono text-sm font-bold text-slate-800 mt-0.5">{ticket.batch}</p>
+                  <p className="font-mono text-sm font-bold text-slate-800 mt-0.5">{ticket.batch || 'Não informado'}</p>
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-slate-400 uppercase">Tipo de Ocorrência</label>

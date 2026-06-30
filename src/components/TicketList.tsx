@@ -14,13 +14,15 @@ import {
   CheckCircle,
   FileText,
   X,
-  ListTodo
+  ListTodo,
+  Sparkles
 } from 'lucide-react';
 
 interface TicketListProps {
   tickets: Ticket[];
   onSelectTicket: (ticketId: string) => void;
   onOpenNewTicketModal: () => void;
+  onOpenNewSpecialTicketModal?: () => void;
   canCreateTicket: boolean;
   globalSearchTerm?: string;
   onClearGlobalSearch?: () => void;
@@ -32,6 +34,7 @@ export const TicketList: React.FC<TicketListProps> = ({
   tickets,
   onSelectTicket,
   onOpenNewTicketModal,
+  onOpenNewSpecialTicketModal,
   canCreateTicket,
   globalSearchTerm = '',
   onClearGlobalSearch,
@@ -210,14 +213,26 @@ export const TicketList: React.FC<TicketListProps> = ({
         {/* Action Button Controls */}
         <div className="flex flex-wrap items-center gap-2">
           {canCreateTicket && (
-            <button
-              id="new-ticket-btn"
-              onClick={onOpenNewTicketModal}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all shadow-sm shadow-blue-500/20 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Novo Chamado (SAC)</span>
-            </button>
+            <>
+              <button
+                id="new-ticket-btn"
+                onClick={onOpenNewTicketModal}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all shadow-sm shadow-blue-500/20 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Novo Chamado (SAC)</span>
+              </button>
+
+              <button
+                id="new-special-ticket-btn"
+                onClick={onOpenNewSpecialTicketModal}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-all shadow-sm shadow-indigo-500/20 cursor-pointer"
+                title="Abrir chamado com campos específicos: Revenda, Consumidor, Valor do Frete, PAC Reverso e UF Cadastrado"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Novo Chamado Especial</span>
+              </button>
+            </>
           )}
 
           <button

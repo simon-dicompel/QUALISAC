@@ -29,20 +29,25 @@ body {
 
 /* Print optimizations for simple print layout */
 @media print {
-  body {
+  html, body, #root, .min-h-screen, main, .flex-1, .flex {
+    height: auto !important;
+    overflow: visible !important;
+    position: static !important;
+    display: block !important;
     background-color: white !important;
-    font-size: 11pt !important;
+    color: black !important;
+    font-size: 10pt !important;
   }
-  header, nav, select, button, .no-print, #tenant-dropdown, [id^="role-btn-"], [id^="status-to-"], #file-element-input, #ai-assist-btn {
+  header, nav, select, button, .no-print, #tenant-dropdown, [id^="role-btn-"], [id^="status-to-"], #file-element-input, #ai-assist-btn, .print\:hidden {
     display: none !important;
   }
-  .bg-slate-900, .bg-slate-950, .bg-slate-800, .bg-slate-50 {
+  .bg-slate-900, .bg-slate-950, .bg-slate-800, .bg-slate-50, .bg-slate-100, .bg-indigo-50\/50, .bg-indigo-50\/40 {
     color: black !important;
     background-color: transparent !important;
     background: none !important;
     border-color: #cbd5e1 !important;
   }
-  .text-white, .text-slate-400, .text-slate-500 {
+  .text-white, .text-slate-400, .text-slate-500, .text-indigo-900, .text-indigo-750 {
     color: black !important;
   }
   .border, .border-b, .border-t, .border-2 {
@@ -51,6 +56,7 @@ body {
   main {
     padding: 0 !important;
     margin: 0 !important;
+    width: 100% !important;
   }
   #ticket-list-wrapper {
     box-shadow: none !important;

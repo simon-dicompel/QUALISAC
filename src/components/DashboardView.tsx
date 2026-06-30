@@ -1,4 +1,6 @@
 import React from 'react';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import { Ticket, IssueType, TicketStatus, Product, Tenant } from '../types';
 import {
   ResponsiveContainer,
@@ -50,12 +52,188 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
   const [isRefreshing, setIsRefreshing] = React.useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = React.useState<number>(0);
 
+  const dashboardRef = React.useRef<HTMLDivElement>(null);
+  const [isGeneratingPDF, setIsGeneratingPDF] = React.useState<boolean>(false);
+  const [isGeneratingLinePDF, setIsGeneratingLinePDF] = React.useState<boolean>(false);
+
   const handleRefresh = () => {
     setIsRefreshing(true);
     setRefreshTrigger((prev) => prev + 1);
     setTimeout(() => {
       setIsRefreshing(false);
     }, 600);
+  };
+
+  const handleDownloadPDF = async () => {
+    const element = dashboardRef.current;
+    if (!element) return;
+
+    setIsGeneratingPDF(true);
+
+    // Hide any elements with class 'no-print' or buttons/selects we don't want in the final PDF
+    const noPrintElements = element.querySelectorAll('.no-print');
+    const originalStyles = Array.from(noPrintElements).map((el) => {
+      const htmlEl = el as HTMLElement;
+      return {
+        element: htmlEl,
+        display: htmlEl.style.display,
+      };
+    });
+
+    originalStyles.forEach((item) => {
+      item.element.style.setProperty('display', 'none', 'important');
+    });
+
+    try {
+      // Small timeout to allow styling update to propagate
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      const canvas = await html2canvas(element, {
+        scale: 1.5,
+        useCORS: true,
+        backgroundColor: '#f8fafc', // Same as container background slate-50
+        logging: false,
+        onclone: (clonedDoc) => {
+          // Fix SVG widths/heights so html2canvas can render Recharts correctly
+          const originalSvgs = element.querySelectorAll('svg');
+          const clonedSvgs = clonedDoc.querySelectorAll('svg');
+          clonedSvgs.forEach((clonedSvg, index) => {
+            const originalSvg = originalSvgs[index];
+            if (originalSvg) {
+              const rect = originalSvg.getBoundingClientRect();
+              const width = rect.width;
+              const height = rect.height;
+              if (width > 0 && height > 0) {
+                clonedSvg.setAttribute('width', width.toString());
+                clonedSvg.setAttribute('height', height.toString());
+              }
+            }
+          });
+        }
+      });
+
+      // Restore original display styles
+      originalStyles.forEach((item) => {
+        item.element.style.display = item.display;
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Add first page
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+      heightLeft -= pageHeight;
+
+      // Add more pages if height left is positive
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+        heightLeft -= pageHeight;
+      }
+
+      const dateStr = new Date().toISOString().split('T')[0];
+      pdf.save(`Relatorio_Qualidade_${activeTenant.name.replace(/\s+/g, '_')}_${dateStr}.pdf`);
+    } catch (error) {
+      console.error('Failed to generate PDF:', error);
+      alert('Ocorreu um erro ao gerar o arquivo PDF. Por favor, tente novamente.');
+      // Make sure we restore items
+      originalStyles.forEach((item) => {
+        item.element.style.display = item.display;
+      });
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  const handleDownloadLineIndicatorsPDF = async () => {
+    const element = document.getElementById('chart-returns-by-line');
+    if (!element) return;
+
+    setIsGeneratingLinePDF(true);
+
+    const noPrintElements = element.querySelectorAll('.no-print');
+    const originalStyles = Array.from(noPrintElements).map((el) => {
+      const htmlEl = el as HTMLElement;
+      return {
+        element: htmlEl,
+        display: htmlEl.style.display,
+      };
+    });
+
+    originalStyles.forEach((item) => {
+      item.element.style.setProperty('display', 'none', 'important');
+    });
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      const canvas = await html2canvas(element, {
+        scale: 2, // High resolution for single card
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        onclone: (clonedDoc) => {
+          // Fix SVG dimensions for Recharts inside the line indicators card
+          const originalSvgs = element.querySelectorAll('svg');
+          const clonedSvgs = clonedDoc.querySelectorAll('svg');
+          clonedSvgs.forEach((clonedSvg, index) => {
+            const originalSvg = originalSvgs[index];
+            if (originalSvg) {
+              const rect = originalSvg.getBoundingClientRect();
+              const width = rect.width;
+              const height = rect.height;
+              if (width > 0 && height > 0) {
+                clonedSvg.setAttribute('width', width.toString());
+                clonedSvg.setAttribute('height', height.toString());
+              }
+            }
+          });
+        }
+      });
+
+      // Restore
+      originalStyles.forEach((item) => {
+        item.element.style.display = item.display;
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const imgWidth = 297; // A4 landscape width in mm
+      const pageHeight = 210; // A4 landscape height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      const yPos = imgHeight < pageHeight ? (pageHeight - imgHeight) / 2 : 0;
+
+      pdf.addImage(imgData, 'PNG', 0, yPos, imgWidth, imgHeight, undefined, 'FAST');
+      
+      const dateStr = new Date().toISOString().split('T')[0];
+      pdf.save(`Indicadores_Linha_Devolucao_${activeTenant.name.replace(/\s+/g, '_')}_${dateStr}.pdf`);
+    } catch (error) {
+      console.error('Failed to generate Line Indicators PDF:', error);
+      alert('Ocorreu um erro ao exportar os indicadores por linha. Por favor, tente novamente.');
+      // Restore on error
+      originalStyles.forEach((item) => {
+        item.element.style.display = item.display;
+      });
+    } finally {
+      setIsGeneratingLinePDF(false);
+    }
   };
 
   // Portuguese months
@@ -692,6 +870,62 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
   const activeProductCode = productDefectCodes.includes(selectedProductCode) ? selectedProductCode : (productDefectCodes[0] || '');
   const activeProduct = productDefectData[activeProductCode];
 
+  // Calculations for Returns by Product Line (Devoluções por Linha de Produto)
+  const productLineStats = React.useMemo(() => {
+    const lineStatsMap: Record<string, { line: string; returnedQty: number; producedQty: number; ticketCount: number }> = {};
+
+    // Initialize with all unique lines from products
+    products.forEach((p) => {
+      const lineName = p.line || 'Geral';
+      if (!lineStatsMap[lineName]) {
+        lineStatsMap[lineName] = { line: lineName, returnedQty: 0, producedQty: 0, ticketCount: 0 };
+      }
+      lineStatsMap[lineName].producedQty += p.producedQty || 0;
+    });
+
+    // Make sure 'Geral' exists as a fallback
+    if (!lineStatsMap['Geral']) {
+      lineStatsMap['Geral'] = { line: 'Geral', returnedQty: 0, producedQty: 0, ticketCount: 0 };
+    }
+
+    // Accumulate returned quantities and ticket counts
+    tickets.forEach((t) => {
+      if (t.items && t.items.length > 0) {
+        const linesTouched = new Set<string>();
+        t.items.forEach((item) => {
+          const prod = products.find((p) => p.code === item.productCode);
+          const lineName = prod?.line || 'Geral';
+          if (!lineStatsMap[lineName]) {
+            lineStatsMap[lineName] = { line: lineName, returnedQty: 0, producedQty: 0, ticketCount: 0 };
+          }
+          lineStatsMap[lineName].returnedQty += item.quantity || 0;
+          linesTouched.add(lineName);
+        });
+        linesTouched.forEach((lineName) => {
+          lineStatsMap[lineName].ticketCount += 1;
+        });
+      } else {
+        const prod = products.find((p) => p.code === t.productCode);
+        const lineName = prod?.line || 'Geral';
+        if (!lineStatsMap[lineName]) {
+          lineStatsMap[lineName] = { line: lineName, returnedQty: 0, producedQty: 0, ticketCount: 0 };
+        }
+        lineStatsMap[lineName].returnedQty += t.quantity || 0;
+        lineStatsMap[lineName].ticketCount += 1;
+      }
+    });
+
+    return Object.values(lineStatsMap)
+      .map((item) => {
+        const rate = item.producedQty > 0 ? (item.returnedQty / item.producedQty) * 100 : 0;
+        return {
+          ...item,
+          rate: parseFloat(rate.toFixed(4)),
+        };
+      })
+      .sort((a, b) => b.returnedQty - a.returnedQty);
+  }, [tickets, products, refreshTrigger]);
+
   // Calculations for Defect Recurrence Rate (Taxa de Reincidência de Defeitos)
   const productOccurrenceMap: Record<string, { code: string; name: string; count: number; totalQty: number }> = {};
   tickets.forEach((t) => {
@@ -733,7 +967,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
   const formatQuantity = (val: number) => `${val} unidades`;
 
   return (
-    <div className="space-y-6">
+    <div ref={dashboardRef} className="space-y-6">
       {/* Printable Header - Visible ONLY when printing */}
       <div className="hidden print:block border-b-2 border-slate-300 pb-4 mb-6">
         <div className="flex justify-between items-end">
@@ -772,12 +1006,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
             <span>{isRefreshing ? 'Atualizando...' : 'Atualizar Dashboard'}</span>
           </button>
           <button
-            onClick={() => window.print()}
-            className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-all shadow-xs cursor-pointer uppercase"
-            title="Imprimir ou exportar o dashboard consolidado do locatário em formato PDF"
+            onClick={handleDownloadPDF}
+            disabled={isGeneratingPDF}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-all shadow-xs cursor-pointer uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Capturar o painel inteiro e salvar como arquivo PDF usando jsPDF e html2canvas"
           >
-            <Printer className="w-4 h-4 text-white" />
-            <span>Exportar Dashboard PDF</span>
+            {isGeneratingPDF ? (
+              <RefreshCw className="w-4 h-4 text-white animate-spin" />
+            ) : (
+              <Printer className="w-4 h-4 text-white" />
+            )}
+            <span>{isGeneratingPDF ? 'Gerando PDF...' : 'Baixar PDF'}</span>
           </button>
           <button
             onClick={handleExportIndicators}
@@ -1116,6 +1355,184 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
             <p className="text-[11px] leading-relaxed text-slate-600">
               💡 <strong>Regra Industrial:</strong> Emissões com volumes acima de 100 unidades estimulam abertura obrigatória automática do <strong>Relatório 8D / 5 Porquês</strong> no setor de Qualidade.
             </p>
+          </div>
+        </div>
+      </div>
+
+      {/* SEÇÃO: Devoluções por Linha de Produto */}
+      <div id="chart-returns-by-line" className="bg-white p-5 rounded-xl card-shadow border border-slate-100 space-y-4 animate-in fade-in duration-200">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+          <div>
+            <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+              <Layers className="w-4 h-4 text-indigo-500" />
+              <span>Indicadores de Devolução por Linha de Produto</span>
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Desempenho e taxa de retorno consolidada agrupada pelas linhas comerciais da Simon Dicompel.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 no-print">
+            <button
+              onClick={handleDownloadLineIndicatorsPDF}
+              disabled={isGeneratingLinePDF}
+              className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] rounded-lg border border-indigo-200 transition-all cursor-pointer uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Baixar os indicadores de devolução por linha como um arquivo PDF independente"
+            >
+              {isGeneratingLinePDF ? (
+                <RefreshCw className="w-3.5 h-3.5 text-indigo-600 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5 text-indigo-600" />
+              )}
+              <span>{isGeneratingLinePDF ? 'Gerando...' : 'Baixar PDF Linhas'}</span>
+            </button>
+            <div className="text-[10px] text-slate-400 font-mono font-bold uppercase hidden sm:block">
+              ISO 9001:2015 &bull; CONTROLE DE LINHAS
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+          {/* Chart Left Side */}
+          <div className="xl:col-span-7 bg-slate-50/30 p-4 rounded-xl border border-slate-100 flex flex-col justify-between">
+            <div>
+              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Volume e Taxa de Retorno</h4>
+              <p className="text-[10px] text-slate-500">Comparativo visual de peças devolvidas e o percentual de falha sobre a produção por linha</p>
+            </div>
+
+            <div className="h-64 mt-4">
+              {productLineStats.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={productLineStats}
+                    margin={{ top: 20, right: 10, left: -25, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis
+                      dataKey="line"
+                      stroke="#64748b"
+                      fontSize={10}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      yAxisId="left"
+                      stroke="#4f46e5"
+                      fontSize={10}
+                      tickLine={false}
+                      label={{ value: 'Peças Devolvidas', angle: -90, position: 'insideLeft', fontSize: 9, fill: '#4f46e5', offset: 10 }}
+                    />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      stroke="#e11d48"
+                      fontSize={10}
+                      tickLine={false}
+                      tickFormatter={(val) => `${val.toFixed(2)}%`}
+                      label={{ value: 'Taxa de Retorno (%)', angle: 90, position: 'insideRight', fontSize: 9, fill: '#e11d48', offset: 10 }}
+                    />
+                    <Tooltip
+                      formatter={(value, name) => {
+                        if (name === 'rate') return [`${parseFloat(value as string).toFixed(4)}%`, 'Taxa de Retorno'];
+                        return [`${value} un`, 'Peças Devolvidas'];
+                      }}
+                      contentStyle={{ fontSize: 11, borderRadius: 8 }}
+                    />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: 10 }} />
+                    <Bar
+                      yAxisId="left"
+                      dataKey="returnedQty"
+                      name="Peças Devolvidas (un)"
+                      fill="#6366f1"
+                      radius={[4, 4, 0, 0]}
+                      barSize={28}
+                    />
+                    <Bar
+                      yAxisId="right"
+                      dataKey="rate"
+                      name="Taxa de Retorno (%)"
+                      fill="#f43f5e"
+                      radius={[4, 4, 0, 0]}
+                      barSize={12}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-slate-400 text-xs italic">
+                  Aguardando dados de linhas de produtos...
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Cards Right Side */}
+          <div className="xl:col-span-5 space-y-3 flex flex-col justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Quadro de Análise Comercial por Linha</span>
+            
+            <div className="space-y-2.5 overflow-y-auto max-h-72 pr-1">
+              {productLineStats.map((item) => {
+                // Determine health badges based on return rate
+                let badgeColor = "bg-emerald-50 text-emerald-700 border-emerald-150";
+                let statusText = "Excelente (Dentro do limite)";
+                if (item.rate > 0.15) {
+                  badgeColor = "bg-rose-50 text-rose-700 border-rose-150";
+                  statusText = "Excedeu Tolerância (Crítico)";
+                } else if (item.rate > 0.05) {
+                  badgeColor = "bg-amber-50 text-amber-700 border-amber-150";
+                  statusText = "Atenção (Próximo ao limite)";
+                }
+
+                return (
+                  <div key={item.line} className="bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-xl p-3.5 transition-all text-xs space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="p-1 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+                          <Layers className="w-3.5 h-3.5" />
+                        </span>
+                        <h4 className="font-extrabold text-slate-800 text-xs truncate uppercase tracking-wider">{item.line}</h4>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-black border uppercase tracking-wider ${badgeColor}`}>
+                        {item.rate.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}%
+                      </span>
+                    </div>
+
+                    {/* Stats details */}
+                    <div className="grid grid-cols-3 gap-2 pt-1.5 border-t border-slate-200/60 text-[10.5px]">
+                      <div>
+                        <span className="text-[9px] text-slate-400 uppercase font-bold block">Produzido</span>
+                        <strong className="text-slate-700">{item.producedQty.toLocaleString('pt-BR')} un</strong>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 uppercase font-bold block">Devolvido</span>
+                        <strong className="text-slate-700">{item.returnedQty.toLocaleString('pt-BR')} un</strong>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 uppercase font-bold block">Chamados</span>
+                        <strong className="text-slate-700">{item.ticketCount} registro(s)</strong>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-[9px]">
+                        <span className="text-slate-500 font-medium">{statusText}</span>
+                        <span className="text-slate-400 font-mono font-bold">Meta: &le; 0,15%</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            item.rate > 0.15 ? 'bg-rose-500' : item.rate > 0.05 ? 'bg-amber-500' : 'bg-emerald-500'
+                          }`}
+                          style={{ width: `${Math.min(100, (item.rate / 0.15) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="bg-indigo-50/60 border border-indigo-100 p-3 rounded-xl text-[10.5px] leading-relaxed text-indigo-950">
+              💡 <strong>Regra de Engenharia Simon Dicompel:</strong> Cada linha possui especificações de tolerância ISO para defeitos mecânicos e elétricos. Desvios acima de <strong>0,15%</strong> disparam auditorias imediatas do plano de controle.
+            </div>
           </div>
         </div>
       </div>

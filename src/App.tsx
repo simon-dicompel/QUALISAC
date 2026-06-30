@@ -184,6 +184,7 @@ export default function App() {
 
   // New ticket modal trigger
   const [isNewTicketModalOpen, setIsNewTicketModalOpen] = useState(false);
+  const [isSpecialTicketMode, setIsSpecialTicketMode] = useState(false);
 
   // Login credentials state
   const [loginEmail, setLoginEmail] = useState('');
@@ -354,7 +355,7 @@ export default function App() {
   const handleCreateTicket = (data: {
     productCode: string;
     productName: string;
-    batch: string;
+    batch?: string;
     clientName: string;
     issueType: IssueType;
     subCategory?: string;
@@ -364,6 +365,12 @@ export default function App() {
     firstContactDate?: string;
     invoiceNumber?: string;
     items?: { id: string; productCode: string; productName: string; quantity: number }[];
+    // Novos campos específicos
+    reseller?: string;
+    consumer?: string;
+    shippingValue?: number;
+    requestedReversePac?: string;
+    registeredUf?: string;
   }) => {
     if (!currentUser) return;
 
@@ -373,6 +380,14 @@ export default function App() {
 
     const timestamp = new Date().toISOString();
 
+    const specialDetails = [
+      data.reseller ? `Revenda: ${data.reseller}` : null,
+      data.consumer ? `Consumidor: ${data.consumer}` : null,
+      data.shippingValue !== undefined ? `Frete: R$ ${data.shippingValue.toFixed(2)}` : null,
+      data.requestedReversePac ? `PAC Reverso: ${data.requestedReversePac}` : null,
+      data.registeredUf ? `UF: ${data.registeredUf}` : null,
+    ].filter(Boolean).join(', ');
+
     const newHist: HistoryStep = {
       id: `h_${Date.now()}`,
       ticketId: newId,
@@ -380,7 +395,7 @@ export default function App() {
       userId: currentUser.id,
       userName: currentUser.name,
       userRole: currentUser.role,
-      details: `SAC registrou devolução de ${data.quantity} unidades (${data.items && data.items.length > 1 ? `${data.items.length} SKUs` : data.productName}) por motivo de ${data.issueType}${data.subCategory ? ` (${data.subCategory})` : ''}. Lote: ${data.batch}`,
+      details: `SAC registrou devolução de ${data.quantity} unidades (${data.items && data.items.length > 1 ? `${data.items.length} SKUs` : data.productName}) por motivo de ${data.issueType}${data.subCategory ? ` (${data.subCategory})` : ''}. Lote: ${data.batch || 'Não Informado'}${specialDetails ? ` | [Campos Especiais] ${specialDetails}` : ''}`,
       timestamp,
     };
 
@@ -407,6 +422,12 @@ export default function App() {
       firstContactDate: data.firstContactDate,
       invoiceNumber: data.invoiceNumber,
       items: data.items,
+      // Mapeamento dos novos campos específicos
+      reseller: data.reseller,
+      consumer: data.consumer,
+      shippingValue: data.shippingValue,
+      requestedReversePac: data.requestedReversePac,
+      registeredUf: data.registeredUf,
     };
 
     setTickets((prev) => [newTicket, ...prev]);
@@ -1197,7 +1218,14 @@ export default function App() {
                   <TicketList
                     tickets={activeTenantTickets}
                     onSelectTicket={(id) => setSelectedTicketId(id)}
-                    onOpenNewTicketModal={() => setIsNewTicketModalOpen(true)}
+                    onOpenNewTicketModal={() => {
+                      setIsSpecialTicketMode(false);
+                      setIsNewTicketModalOpen(true);
+                    }}
+                    onOpenNewSpecialTicketModal={() => {
+                      setIsSpecialTicketMode(true);
+                      setIsNewTicketModalOpen(true);
+                    }}
                     canCreateTicket={canCreateTicket}
                     globalSearchTerm={globalSearchTerm}
                     onClearGlobalSearch={() => setGlobalSearchTerm('')}
@@ -1483,6 +1511,7 @@ export default function App() {
           onSubmit={handleCreateTicket}
           products={products}
           issueTypes={issueTypes}
+          isSpecial={isSpecialTicketMode}
         />
       )}
 
