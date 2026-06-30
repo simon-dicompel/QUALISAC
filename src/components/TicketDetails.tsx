@@ -951,6 +951,52 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 </p>
               </div>
 
+              {/* Campos Específicos para Chamado Especial no modo interativo */}
+              {(ticket.reseller || ticket.consumer || ticket.shippingValue !== undefined || ticket.requestedReversePac || ticket.registeredUf) && (
+                <div className="pt-3 border-t border-slate-100">
+                  <label className="text-[11px] font-bold text-indigo-500 uppercase tracking-wider block mb-2 font-mono flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-pulse"></span>
+                    <span>Informações Adicionais do Chamado Especial</span>
+                  </label>
+                  <div className="bg-indigo-50/40 border border-indigo-100 p-3.5 rounded-xl space-y-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
+                      {ticket.reseller && (
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-bold uppercase block">Revenda</span>
+                          <strong className="text-slate-800 font-bold text-xs">{ticket.reseller}</strong>
+                        </div>
+                      )}
+                      {ticket.consumer && (
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-bold uppercase block">Consumidor</span>
+                          <strong className="text-slate-800 font-bold text-xs">{ticket.consumer}</strong>
+                        </div>
+                      )}
+                      {ticket.shippingValue !== undefined && (
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-bold uppercase block">Valor Frete</span>
+                          <strong className="text-slate-800 font-bold text-xs">
+                            R$ {ticket.shippingValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </strong>
+                        </div>
+                      )}
+                      {ticket.requestedReversePac && (
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-bold uppercase block">PAC Reverso</span>
+                          <strong className="text-slate-800 font-bold text-xs">{ticket.requestedReversePac}</strong>
+                        </div>
+                      )}
+                      {ticket.registeredUf && (
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-bold uppercase block">UF Cadastrado</span>
+                          <strong className="text-slate-800 font-bold text-xs uppercase">{ticket.registeredUf}</strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Defects breakdown list */}
               {ticket.defects && ticket.defects.length > 0 && (
                 <div className="pt-3 border-t border-slate-100">

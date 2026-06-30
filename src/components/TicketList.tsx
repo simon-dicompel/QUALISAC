@@ -72,7 +72,7 @@ export const TicketList: React.FC<TicketListProps> = ({
       ticket.productName.toLowerCase().includes(sQuery) ||
       ticket.clientName.toLowerCase().includes(sQuery) ||
       (ticket.invoiceNumber && ticket.invoiceNumber.toLowerCase().includes(sQuery)) ||
-      ticket.batch.toLowerCase().includes(sQuery) ||
+      (ticket.batch && ticket.batch.toLowerCase().includes(sQuery)) ||
       matchesItemsLocal;
 
     const matchesItemsGlobal = ticket.items?.some(it => 
@@ -87,7 +87,7 @@ export const TicketList: React.FC<TicketListProps> = ({
       ticket.productName.toLowerCase().includes(gQuery) ||
       ticket.clientName.toLowerCase().includes(gQuery) ||
       (ticket.invoiceNumber && ticket.invoiceNumber.toLowerCase().includes(gQuery)) ||
-      ticket.batch.toLowerCase().includes(gQuery) ||
+      (ticket.batch && ticket.batch.toLowerCase().includes(gQuery)) ||
       matchesItemsGlobal;
 
     const matchesStatus = statusFilter === 'all' || ticket.status === statusFilter;
@@ -220,7 +220,7 @@ export const TicketList: React.FC<TicketListProps> = ({
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all shadow-sm shadow-blue-500/20 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                <span>Novo Chamado (SAC)</span>
+                <span>Novo chamado(QLD)</span>
               </button>
 
               <button
@@ -230,7 +230,7 @@ export const TicketList: React.FC<TicketListProps> = ({
                 title="Abrir chamado com campos específicos: Revenda, Consumidor, Valor do Frete, PAC Reverso e UF Cadastrado"
               >
                 <Sparkles className="w-4 h-4" />
-                <span>Novo Chamado Especial</span>
+                <span>Novo Chamado (SAC)</span>
               </button>
             </>
           )}

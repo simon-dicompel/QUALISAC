@@ -204,13 +204,17 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
             <ClipboardList className={`w-5 h-5 ${isSpecial ? 'text-indigo-600' : 'text-blue-600'}`} />
             <div>
               <span className="font-extrabold text-slate-800 text-sm uppercase tracking-wider block">
-                {isSpecial ? 'Abertura de Chamado Especial' : 'Abertura de Chamado'}
+                {isSpecial ? 'Abertura de Chamado (SAC)' : 'Abertura de Chamado (QLD)'}
               </span>
               <span className="text-[9.5px] text-slate-500 font-medium block">SAC - CONTROLE DE QUALIDADE SIMON DICOMPEL</span>
             </div>
-            {isSpecial && (
+            {isSpecial ? (
               <span className="ml-2 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md bg-indigo-100 text-indigo-700 border border-indigo-200 animate-pulse">
-                Especial
+                SAC
+              </span>
+            ) : (
+              <span className="ml-2 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md bg-blue-100 text-blue-700 border border-blue-200 animate-pulse">
+                QLD
               </span>
             )}
           </div>

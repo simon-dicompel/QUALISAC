@@ -21,7 +21,6 @@ import { DashboardView } from './components/DashboardView';
 import { TicketList } from './components/TicketList';
 import { TicketDetails } from './components/TicketDetails';
 import { NewTicketModal } from './components/NewTicketModal';
-import { EmailConsole } from './components/EmailConsole';
 import { AdminConfigView } from './components/AdminConfigView';
 import { 
   LayoutDashboard, 
@@ -178,9 +177,6 @@ export default function App() {
   
   // Selected single ticket state for detailed work area
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
-
-  // Email Notification Console visibility state
-  const [isEmailConsoleOpen, setIsEmailConsoleOpen] = useState(false);
 
   // New ticket modal trigger
   const [isNewTicketModalOpen, setIsNewTicketModalOpen] = useState(false);
@@ -374,9 +370,19 @@ export default function App() {
   }) => {
     if (!currentUser) return;
 
-    // Generate unique ID
-    const nextNum = Math.floor(1000 + Math.random() * 9000);
-    const newId = `TK-${nextNum}`;
+    // Generate unique ID with prefix based on whether it is a Special Ticket (SAC) or Normal Ticket (QLD)
+    const isSpecial = isSpecialTicketMode || !!(data.reseller || data.consumer || data.shippingValue !== undefined || data.requestedReversePac || data.registeredUf);
+    const prefix = isSpecial ? 'SAC' : 'QLD';
+    
+    // Find the next unique sequential number
+    const samePrefixTickets = tickets.filter((t) => t.id.startsWith(prefix));
+    let nextSeq = samePrefixTickets.length + 1;
+    let newId = `${prefix}-${String(nextSeq).padStart(4, '0')}`;
+    
+    while (tickets.some((t) => t.id === newId)) {
+      nextSeq++;
+      newId = `${prefix}-${String(nextSeq).padStart(4, '0')}`;
+    }
 
     const timestamp = new Date().toISOString();
 
@@ -763,7 +769,6 @@ export default function App() {
       serviceType: 'Amazon SES SMTP Service (Simulado de Teste)',
     };
     setSystemEmailLogs((prev) => [testEmailLog, ...prev]);
-    setIsEmailConsoleOpen(true); // Open the console immediately so they see the result!
   };
 
   const handleResetAppDatabase = () => {
@@ -1151,31 +1156,8 @@ export default function App() {
             </div>
           </div>
 
-          {/* Clean system reset option & SMTP Queue Toggle */}
-          <div className="space-y-2">
-            <button
-              onClick={() => setIsEmailConsoleOpen(true)}
-              className="w-full inline-flex items-center justify-between px-3 py-2 text-[10px] font-bold text-slate-300 bg-slate-950 hover:bg-slate-850 rounded-lg border border-slate-800 hover:border-slate-700 transition-all cursor-pointer uppercase"
-              title="Acessar painel interno do servidor de faturamento/SMTP"
-            >
-              <div className="flex items-center gap-1.5">
-                <Terminal className="w-3.5 h-3.5 text-blue-400" />
-                <span>Console SMTP</span>
-              </div>
-              <span className="bg-blue-900 text-blue-200 px-1.5 py-0.2 rounded font-mono text-[9px]">
-                {systemEmailLogs.length} un
-              </span>
-            </button>
-
-            <button
-              id="wipe-simulation-btn"
-              onClick={handleWipeDatabaseForSimulation}
-              className="w-full inline-flex items-center justify-center gap-1 px-3 py-2 text-[10px] font-bold text-rose-400 bg-slate-950 hover:bg-rose-950 hover:text-white rounded-lg border border-slate-800 hover:border-rose-900 transition-all cursor-pointer uppercase"
-              title="Zerar todos os chamados e produtos para simulação do zero"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-              <span>Zerar Produtos e Chamados</span>
-            </button>
+          {/* System info footer */}
+          <div className="space-y-2 pt-2 border-t border-slate-900">
             <p className="text-[9px] text-slate-600 text-center">Version 1.4.0 &bull; 2026</p>
             <p className="text-[9px] text-slate-500 font-medium text-center mt-1">Desenvolvido Coolit Soluções em TI.</p>
           </div>
@@ -1514,15 +1496,6 @@ export default function App() {
           isSpecial={isSpecialTicketMode}
         />
       )}
-
-      {/* 6. Simulated Email Notifications Logs Console */}
-      <EmailConsole
-        logs={systemEmailLogs}
-        onClearLogs={handleClearEmailLogs}
-        onSendTestLog={handleSendTestEmailLog}
-        isOpen={isEmailConsoleOpen}
-        onToggle={() => setIsEmailConsoleOpen(prev => !prev)}
-      />
 
     </div>
   );
