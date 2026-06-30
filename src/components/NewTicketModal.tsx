@@ -38,7 +38,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   issueTypes,
   isSpecial = false,
 }) => {
-  const [productCode, setProductCode] = useState(products[0]?.code || 'CUSTOM');
+  const [productCode, setProductCode] = useState(products[0]?.code || '');
   const [customProductName, setCustomProductName] = useState(products[0]?.name || '');
   const [batch, setBatch] = useState('');
   const [clientName, setClientName] = useState('');
@@ -70,7 +70,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   React.useEffect(() => {
     if (isOpen) {
       const firstProd = products[0];
-      setProductCode(firstProd?.code || 'CUSTOM');
+      setProductCode(firstProd?.code || '');
       setCustomProductName(firstProd?.name || '');
       setBatch('');
       setClientName('');
@@ -97,12 +97,13 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   if (!isOpen) return null;
 
   const handleProductSelect = (code: string) => {
-    setProductCode(code);
     if (code === 'CUSTOM') {
+      setProductCode('');
       setCustomProductName('');
     } else {
       const found = products.find((p) => p.code === code);
       if (found) {
+        setProductCode(found.code);
         setCustomProductName(found.name);
       }
     }
@@ -128,16 +129,16 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
       return;
     }
 
-    if (!hasItems && !customProductName.trim()) {
-      alert('Por favor, selecione ou digite o nome do produto.');
+    if (!hasItems && (!productCode.trim() || !customProductName.trim())) {
+      alert('Por favor, informe o código e o nome do produto.');
       return;
     }
 
     const finalItems = hasItems ? itemsList : [
       {
         id: `item_${Date.now()}`,
-        productCode: productCode === 'CUSTOM' ? 'PROD-CUSTOM' : productCode,
-        productName: customProductName,
+        productCode: productCode.trim() || 'PROD-CUSTOM',
+        productName: customProductName.trim(),
         quantity: quantity,
       }
     ];
@@ -243,35 +244,50 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
               )}
             </div>
 
+            {/* Quick pre-fill selector */}
+            <div className="pt-1.5 pb-0.5">
+              <label className="block text-[10px] font-bold text-indigo-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse"></span>
+                Preenchimento Rápido (Selecione um Produto Cadastrado)
+              </label>
+              <select
+                id="modal-product-select"
+                value={products.some(p => p.code === productCode && p.name === customProductName) ? productCode : 'CUSTOM'}
+                onChange={(e) => handleProductSelect(e.target.value)}
+                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+              >
+                <option value="CUSTOM">🆕 Digitar campos manualmente...</option>
+                {products.map((p) => (
+                  <option key={p.code} value={p.code}>
+                    🏷️ {p.code} — {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Selector and Inputs for item */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-end">
-              <div className="md:col-span-4">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Selecione o Produto</label>
-                <select
-                  id="modal-product-select"
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-end pt-1">
+              <div className="md:col-span-3">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Código do Produto *</label>
+                <input
+                  id="modal-product-code-input"
+                  type="text"
+                  placeholder="Ex: PROD-101"
                   value={productCode}
-                  onChange={(e) => handleProductSelect(e.target.value)}
-                  className="w-full px-2.5 py-1.5 border border-slate-250 rounded-lg text-xs bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {products.map((p) => (
-                    <option key={p.code} value={p.code}>
-                      🏷️ {p.code} ({p.name.substring(0, 20)}...)
-                    </option>
-                  ))}
-                  <option value="CUSTOM">🆕 Outro (Digitar personalizado)</option>
-                </select>
+                  onChange={(e) => setProductCode(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                />
               </div>
 
-              <div className="md:col-span-5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Nome do Produto</label>
+              <div className="md:col-span-6">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Nome do Produto *</label>
                 <input
                   id="modal-product-name-input"
                   type="text"
-                  disabled={productCode !== 'CUSTOM'}
                   placeholder="Ex: Embalagem Alumínio 5kg"
                   value={customProductName}
                   onChange={(e) => setCustomProductName(e.target.value)}
-                  className="w-full px-2.5 py-1.5 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
+                  className="w-full px-2.5 py-1.5 border border-slate-250 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                 />
               </div>
 
@@ -292,11 +308,15 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                   type="button"
                   title="Adicionar SKU ao chamado"
                   onClick={() => {
+                    if (!productCode.trim()) {
+                      alert('Por favor, informe o código do produto.');
+                      return;
+                    }
                     if (!customProductName.trim()) {
                       alert('Por favor, informe o nome do produto.');
                       return;
                     }
-                    const sku = productCode === 'CUSTOM' ? 'PROD-CUSTOM' : productCode;
+                    const sku = productCode.trim();
                     
                     // Check if already in itemsList
                     if (itemsList.some(item => item.productCode === sku)) {
@@ -307,15 +327,14 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                     const item = {
                       id: `item_${Date.now()}`,
                       productCode: sku,
-                      productName: customProductName,
+                      productName: customProductName.trim(),
                       quantity: quantity,
                     };
                     setItemsList((prev) => [...prev, item]);
                     
                     // Reset single selection inputs
-                    const nextProd = products[0];
-                    setProductCode(nextProd?.code || 'CUSTOM');
-                    setCustomProductName(nextProd?.name || '');
+                    setProductCode('');
+                    setCustomProductName('');
                     setQuantity(1);
                   }}
                   className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold flex items-center justify-center transition-colors cursor-pointer shadow-xs"

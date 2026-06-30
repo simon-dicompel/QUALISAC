@@ -963,6 +963,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
     .sort((a, b) => b.Chamados - a.Chamados)
     .slice(0, 6);
 
+  // Bar chart data for the primary view: Top products with most claimed pieces
+  const mostClaimedProductsData = React.useMemo(() => {
+    const productMap: Record<string, { name: string; fullName: string; code: string; Chamados: number; Pecas: number }> = {};
+    tickets.forEach((t) => {
+      const code = t.productCode || 'N/A';
+      const name = t.productName || 'Desconhecido';
+      if (!productMap[code]) {
+        productMap[code] = {
+          name: name.length > 15 ? `${name.substring(0, 12)}...` : name,
+          fullName: name,
+          code,
+          Chamados: 0,
+          Pecas: 0
+        };
+      }
+      productMap[code].Chamados += 1;
+      productMap[code].Pecas += t.quantity || 0;
+    });
+    return Object.values(productMap)
+      .sort((a, b) => b.Pecas - a.Pecas) // Sort by total pieces returned
+      .slice(0, 6); // Top 6 products
+  }, [tickets, refreshTrigger]);
+
   // Custom tooltips
   const formatQuantity = (val: number) => `${val} unidades`;
 
@@ -1230,28 +1253,46 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
           </div>
         </div>
 
-        {/* Chart B: Issue type bar */}
+        {/* Chart B: Produtos mais reclamados */}
         <div className="bg-white p-4.5 rounded-xl card-shadow border border-slate-100 xl:col-span-7">
           <div className="flex justify-between items-center">
             <div>
-              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Volume por Tipo de Problema</h3>
-              <p className="text-[11px] text-slate-500">Total de chamados vs. total de mercadorias danificadas</p>
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Produtos Mais Reclamados</h3>
+              <p className="text-[11px] text-slate-500">Volume de ocorrências e peças reclamadas por produto (Top 6)</p>
             </div>
           </div>
 
           <div className="h-64 mt-6">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={issueTypeData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" fontSize={11} stroke="#64748b" />
-                <YAxis yAxisId="left" stroke="#4f46e5" fontSize={11} label={{ value: 'Chamados', angle: -90, position: 'insideLeft', fontSize: 10, fill: '#4f46e5' }} />
-                <YAxis yAxisId="right" orientation="right" stroke="#7c3aed" fontSize={11} label={{ value: 'Peças Devolvidas', angle: 90, position: 'insideRight', fontSize: 10, fill: '#7c3aed' }} />
-                <Tooltip />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
-                <Bar yAxisId="left" dataKey="Qtd" name="Qtd Chamados" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={25} />
-                <Bar yAxisId="right" dataKey="Pecas" name="Peças Devolvidas" fill="#c084fc" radius={[4, 4, 0, 0]} barSize={25} />
-              </BarChart>
-            </ResponsiveContainer>
+            {mostClaimedProductsData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={mostClaimedProductsData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" fontSize={10} stroke="#64748b" tickLine={false} />
+                  <YAxis yAxisId="left" stroke="#3b82f6" fontSize={10} tickLine={false} label={{ value: 'Chamados', angle: -90, position: 'insideLeft', fontSize: 9, fill: '#3b82f6', offset: -5 }} />
+                  <YAxis yAxisId="right" orientation="right" stroke="#f43f5e" fontSize={10} tickLine={false} label={{ value: 'Peças Devolvidas', angle: 90, position: 'insideRight', fontSize: 9, fill: '#f43f5e', offset: -5 }} />
+                  <Tooltip
+                    formatter={(value, name, props) => {
+                      if (name === 'Chamados') return [`${value} chamado(s)`];
+                      return [`${value} peça(s) devolvida(s)`];
+                    }}
+                    labelFormatter={(label, items) => {
+                      if (items && items[0]) {
+                        return `${items[0].payload.fullName} (SKU: ${items[0].payload.code})`;
+                      }
+                      return label;
+                    }}
+                    contentStyle={{ fontSize: 11, borderRadius: 8 }}
+                  />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
+                  <Bar yAxisId="left" dataKey="Chamados" name="Chamados" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={22} />
+                  <Bar yAxisId="right" dataKey="Pecas" name="Peças Devolvidas" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={22} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-slate-400 text-xs italic">
+                Nenhum produto com chamados registrados.
+              </div>
+            )}
           </div>
         </div>
       </div>
