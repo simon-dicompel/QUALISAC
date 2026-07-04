@@ -1073,7 +1073,7 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
                         </td>
                         <td className="py-3 px-3">
                           <span className="font-mono text-[11px] text-slate-700">{u.email}</span>
-                          <span className="text-[10px] text-slate-400 block mt-0.5">Senha: <code className="bg-slate-100 px-1 rounded text-red-500 font-bold">{u.passwordHash}</code></span>
+                          <span className="text-[10px] text-slate-400 block mt-0.5">Senha: <SafePasswordDisplay password={u.passwordHash} /></span>
                         </td>
                         <td className="py-3 px-3">
                           <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase inline-block ${
@@ -1148,5 +1148,24 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
       )}
 
     </div>
+  );
+};
+
+const SafePasswordDisplay: React.FC<{ password?: string }> = ({ password }) => {
+  const [visible, setVisible] = useState(false);
+  if (!password) return <span className="text-slate-400">-</span>;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <code className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 font-mono text-[10px]">
+        {visible ? password : '••••••••'}
+      </code>
+      <button
+        type="button"
+        onClick={() => setVisible(!visible)}
+        className="text-[9px] font-bold text-blue-500 hover:text-blue-700 underline cursor-pointer select-none"
+      >
+        {visible ? 'Ocultar' : 'Mostrar'}
+      </button>
+    </span>
   );
 };

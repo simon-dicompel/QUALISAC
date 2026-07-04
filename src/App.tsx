@@ -53,62 +53,61 @@ import {
 
 export default function App() {
   // Prerecorded clean defaults for testing
-  const DEFAULT_TEST_TENANT: Tenant = {
-    id: 'tenant_test_1',
-    name: 'Minha Empresa de Teste',
-    plan: 'Enterprise',
-    status: 'Ativo',
-    createdAt: new Date().toISOString(),
-    color: '#6366f1',
-  };
+  const DEFAULT_TEST_TENANT: Tenant = INITIAL_TENANTS[0];
 
-  const DEFAULT_TEST_USER: User = {
-    id: 'user_admin_test',
-    name: 'Administrador de Teste',
-    email: 'admin@dicompel.com.br',
-    role: 'ADMIN',
-    passwordHash: 'Dicompel!@#2026',
-    tenantId: 'tenant_test_1',
-  };
+  const DEFAULT_TEST_USER: User = INITIAL_USERS[0];
+
+  // Operation Mode: true = Production (Secure & isolated), false = Homologation (Demo aids visible)
+  const [isProductionMode, setIsProductionMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem('q_is_production_mode');
+    return saved !== null ? saved === 'true' : true; // Default is TRUE for secure production
+  });
+
+  useEffect(() => {
+    localStorage.setItem('q_is_production_mode', String(isProductionMode));
+  }, [isProductionMode]);
 
   // Run on mount to clear previous mock data of initialData and start from clean State
   React.useEffect(() => {
-    const isWiped = localStorage.getItem('q_test_wiped_v10');
+    const isWiped = localStorage.getItem('q_test_wiped_v12');
     if (!isWiped) {
       localStorage.clear();
       localStorage.setItem('q_tickets', JSON.stringify([]));
       localStorage.setItem('q_products', JSON.stringify(INITIAL_PRODUCTS));
-      localStorage.setItem('q_tenants', JSON.stringify([DEFAULT_TEST_TENANT]));
-      localStorage.setItem('q_users', JSON.stringify([DEFAULT_TEST_USER]));
-      localStorage.setItem('q_activeTenant', JSON.stringify(DEFAULT_TEST_TENANT));
-      localStorage.setItem('q_currentUser', JSON.stringify(DEFAULT_TEST_USER));
+      localStorage.setItem('q_tenants', JSON.stringify(INITIAL_TENANTS));
+      localStorage.setItem('q_users', JSON.stringify(INITIAL_USERS));
+      localStorage.setItem('q_activeTenant', JSON.stringify(INITIAL_TENANTS[0]));
+      localStorage.removeItem('q_currentUser'); // User starts in login
       localStorage.setItem('q_systemEmailLogs', JSON.stringify([]));
-      localStorage.setItem('q_test_wiped_v10', 'true');
+      localStorage.setItem('q_is_production_mode', 'true'); // Production by default
+      localStorage.setItem('q_test_wiped_v12', 'true');
 
       // Refresh state
       setTickets([]);
       setProducts(INITIAL_PRODUCTS);
-      setTenants([DEFAULT_TEST_TENANT]);
-      setUsers([DEFAULT_TEST_USER]);
-      setActiveTenant(DEFAULT_TEST_TENANT);
-      setCurrentUser(DEFAULT_TEST_USER);
+      setTenants(INITIAL_TENANTS);
+      setUsers(INITIAL_USERS);
+      setActiveTenant(INITIAL_TENANTS[0]);
+      setCurrentUser(null);
       setSystemEmailLogs([]);
       setSelectedTicketId(null);
       setActiveMenu('chamados');
     }
 
     // Dynamic clean state requested by the user to start simulation with 0 tickets and 0 products
-    const isSimulationWiped = localStorage.getItem('q_test_wiped_simulation_v1');
+    const isSimulationWiped = localStorage.getItem('q_test_wiped_simulation_v3');
     if (!isSimulationWiped) {
       localStorage.setItem('q_tickets', JSON.stringify([]));
       localStorage.setItem('q_products', JSON.stringify([]));
       localStorage.setItem('q_systemEmailLogs', JSON.stringify([]));
-      localStorage.setItem('q_test_wiped_simulation_v1', 'true');
+      localStorage.removeItem('q_currentUser'); // Ensure starts on login
+      localStorage.setItem('q_test_wiped_simulation_v3', 'true');
 
       // Refresh state
       setTickets([]);
       setProducts([]);
       setSystemEmailLogs([]);
+      setCurrentUser(null);
       setSelectedTicketId(null);
       setActiveMenu('chamados');
     }
@@ -117,12 +116,12 @@ export default function App() {
   // --- 1. Persistent Database Engine (LocalStorage powered) ---
   const [tenants, setTenants] = useState<Tenant[]>(() => {
     const saved = localStorage.getItem('q_tenants');
-    return saved ? JSON.parse(saved) : [DEFAULT_TEST_TENANT];
+    return saved ? JSON.parse(saved) : INITIAL_TENANTS;
   });
 
   const [users, setUsers] = useState<User[]>(() => {
     const saved = localStorage.getItem('q_users');
-    return saved ? JSON.parse(saved) : [DEFAULT_TEST_USER];
+    return saved ? JSON.parse(saved) : INITIAL_USERS;
   });
 
   const [tickets, setTickets] = useState<Ticket[]>(() => {
@@ -132,14 +131,20 @@ export default function App() {
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('q_currentUser');
-    if (saved) return JSON.parse(saved);
-    return DEFAULT_TEST_USER;
+    if (saved && saved !== 'null') {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return null;
+      }
+    }
+    return null; // Production default: start in login screen
   });
 
   const [activeTenant, setActiveTenant] = useState<Tenant>(() => {
     const savedT = localStorage.getItem('q_activeTenant');
     if (savedT) return JSON.parse(savedT);
-    return DEFAULT_TEST_TENANT;
+    return INITIAL_TENANTS[0];
   });
 
   const [systemEmailLogs, setSystemEmailLogs] = useState<SystemEmailLog[]>(() => {
@@ -337,7 +342,11 @@ export default function App() {
       setLoginEmail('');
       setLoginPassword('');
     } else {
-      setLoginError('Email de acesso ou senha incorretos. Veja as credenciais prontas abaixo para testar rápido.');
+      setLoginError(
+        isProductionMode
+          ? 'Email de acesso ou senha incorretos. Por favor, verifique suas credenciais de produção.'
+          : 'Email de acesso ou senha incorretos. Selecione uma conta de teste abaixo para entrar de forma segura.'
+      );
     }
   };
 
@@ -858,23 +867,23 @@ export default function App() {
   // LOGIN CONTAINER
   if (!currentUser) {
     return (
-      <div className="min-h-screen flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-slate-900 text-slate-100">
+      <div className="min-h-screen flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-slate-950 text-slate-100">
         <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-          <div className="mx-auto h-12 w-12 bg-blue-600 rounded-xl flex items-center justify-center font-black text-2xl text-white shadow-xl shadow-blue-500/10">
+          <div className="mx-auto h-16 w-16 bg-blue-600 rounded-2xl flex items-center justify-center font-black text-3xl text-white shadow-xl shadow-blue-500/10">
             Q
           </div>
-          <h2 className="mt-6 text-3xl font-extrabold text-white">QualiSAC</h2>
-          <p className="mt-2 text-sm text-slate-400">
-            Sistema Integrado de Devoluções e Tratamento de Não Conformidades
+          <h2 className="mt-6 text-3xl font-black text-white tracking-tight uppercase">QualiSAC</h2>
+          <p className="mt-2 text-xs text-slate-400 font-medium max-w-xs mx-auto">
+            Portal Integrado de Devoluções e Gestão de Não Conformidades Industriais
           </p>
         </div>
 
         <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="bg-slate-850 py-8 px-6 shadow-2xl rounded-2xl border border-slate-800 space-y-6">
+          <div className="bg-slate-900 py-8 px-6 shadow-2xl rounded-2xl border border-slate-800 space-y-6">
             
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase">Email Corporativo</label>
+                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Email Corporativo</label>
                 <input
                   id="login-email-input"
                   type="email"
@@ -882,25 +891,25 @@ export default function App() {
                   placeholder="ex: admin@quali.com"
                   value={loginEmail}
                   onChange={(e) => setLoginEmail(e.target.value)}
-                  className="mt-1.5 block w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm placeholder-slate-500 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="mt-1.5 block w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs placeholder-slate-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-slate-700 transition-all"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase">Senha</label>
+                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Senha de Acesso</label>
                 <input
                   id="login-password-input"
                   type="password"
                   required
-                  placeholder="Digite sua senha de teste"
+                  placeholder="Sua senha secreta"
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
-                  className="mt-1.5 block w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm placeholder-slate-500 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="mt-1.5 block w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs placeholder-slate-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-slate-700 transition-all"
                 />
               </div>
 
               {loginError && (
-                <div className="p-3 bg-red-950/50 border border-red-900 rounded-lg text-xs leading-relaxed text-red-400">
+                <div className="p-3 bg-red-950/40 border border-red-900/60 rounded-xl text-xs leading-relaxed text-red-400">
                   ⚠️ {loginError}
                 </div>
               )}
@@ -908,36 +917,84 @@ export default function App() {
               <button
                 id="login-submit-btn"
                 type="submit"
-                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all cursor-pointer shadow-lg shadow-blue-600/10"
+                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all cursor-pointer shadow-lg shadow-blue-600/10"
               >
                 Autenticar no Sistema
               </button>
             </form>
 
-            <div className="border-t border-slate-800 pt-5">
-              <p className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-1">
-                <Sliders className="w-3.5 h-3.5 text-blue-400" />
-                <span>Escolha um perfil para entrar direto:</span>
-              </p>
-              
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {INITIAL_USERS.slice(0, 4).map((user) => (
-                  <button
-                    id={`login-quick-${user.id}`}
-                    key={user.id}
-                    onClick={() => {
-                      setLoginEmail(user.email);
-                      setLoginPassword(user.passwordHash || '');
-                    }}
-                    type="button"
-                    className="p-2.5 bg-slate-800 hover:bg-slate-750 text-left rounded-lg text-slate-300 font-medium border border-slate-750 hover:border-slate-650 transition-all flex flex-col cursor-pointer"
-                  >
-                    <span className="font-bold text-white truncate text-xs">{user.name}</span>
-                    <span className="text-[10px] text-slate-450 mt-0.5 truncate">{user.role} &bull; {user.passwordHash}</span>
-                  </button>
-                ))}
+            {/* Operation Mode Selector Toggle */}
+            <div className="flex items-center justify-between border-t border-slate-800/80 pt-5 mt-4">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${isProductionMode ? 'bg-emerald-500 animate-pulse' : 'bg-indigo-500 animate-pulse'}`}></span>
+                Modo de Operação:
+              </span>
+              <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsProductionMode(true)}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                    isProductionMode
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Ocultar credenciais simuladas e usar login real isolado de produção"
+                >
+                  🔒 Produção
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsProductionMode(false)}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                    !isProductionMode
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Exibir atalhos de contas pré-configuradas para demonstração rápida"
+                >
+                  🧪 Homologação
+                </button>
               </div>
             </div>
+
+            {/* Quick Access Accounts (Only displayed in Homologation/Demo Mode) */}
+            {!isProductionMode && (
+              <div className="bg-slate-950/40 border border-slate-800/60 p-4.5 rounded-xl space-y-3 animate-fade-in">
+                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                  <Sliders className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Selecione uma conta de teste para preenchimento rápido:</span>
+                </p>
+                
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {INITIAL_USERS.slice(0, 4).map((user) => (
+                    <button
+                      id={`login-quick-${user.id}`}
+                      key={user.id}
+                      onClick={() => {
+                        setLoginEmail(user.email);
+                        setLoginPassword(user.passwordHash || '');
+                      }}
+                      type="button"
+                      className="p-2.5 bg-slate-800 hover:bg-slate-750 text-left rounded-lg text-slate-300 font-medium border border-slate-750 hover:border-slate-650 transition-all flex flex-col cursor-pointer"
+                    >
+                      <span className="font-bold text-white truncate text-xs">{user.name}</span>
+                      <span className="text-[10px] text-slate-400 mt-0.5 truncate uppercase tracking-wider font-semibold flex items-center justify-between w-full">
+                        <span>{user.role}</span>
+                        <span className="text-sky-400 text-[9px] lowercase tracking-normal font-normal">acesso rápido</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {isProductionMode && (
+              <div className="text-center">
+                <p className="text-[10px] text-slate-500 italic">
+                  Ambiente seguro ativo. Use seu email e senha corporativos de locatário cadastrado para acessar o portal.
+                </p>
+              </div>
+            )}
 
           </div>
         </div>
@@ -949,17 +1006,19 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       
-      {/* 1. SaaS Multi-tenant & Simulating Role Switching Header Banner */}
-      <div className="no-print">
-        <SaasTenantSelector
-          tenants={tenants}
-          activeTenant={activeTenant}
-          onSelectTenant={handleSelectTenant}
-          users={users}
-          currentUser={currentUser}
-          onSwitchUser={handleSwitchUser}
-        />
-      </div>
+      {/* 1. SaaS Multi-tenant & Simulating Role Switching Header Banner (Only visible in Homologation/Demo mode) */}
+      {!isProductionMode && (
+        <div className="no-print animate-fade-in">
+          <SaasTenantSelector
+            tenants={tenants}
+            activeTenant={activeTenant}
+            onSelectTenant={handleSelectTenant}
+            users={users}
+            currentUser={currentUser}
+            onSwitchUser={handleSwitchUser}
+          />
+        </div>
+      )}
 
       {/* 2. Main Executive Header */}
       <header className="bg-white border-b border-slate-200 py-3 px-6 shadow-xs flex items-center justify-between no-print gap-4">
@@ -1158,6 +1217,19 @@ export default function App() {
 
           {/* System info footer */}
           <div className="space-y-2 pt-2 border-t border-slate-900">
+            <div className="flex justify-center">
+              <button
+                onClick={() => setIsProductionMode(!isProductionMode)}
+                className={`text-[9px] px-2 py-1 rounded border font-semibold tracking-wider uppercase transition-all cursor-pointer ${
+                  isProductionMode
+                    ? 'border-emerald-800/60 text-emerald-500 bg-emerald-950/20 hover:bg-emerald-950/50'
+                    : 'border-indigo-800/60 text-indigo-400 bg-indigo-950/20 hover:bg-indigo-950/50'
+                }`}
+                title="Clique para alternar o modo de operação do sistema"
+              >
+                {isProductionMode ? '🔒 Modo Produção' : '🧪 Modo Homologação'}
+              </button>
+            </div>
             <p className="text-[9px] text-slate-600 text-center">Version 1.4.0 &bull; 2026</p>
             <p className="text-[9px] text-slate-500 font-medium text-center mt-1">Desenvolvido Coolit Soluções em TI.</p>
           </div>
