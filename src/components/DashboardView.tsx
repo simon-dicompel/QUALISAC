@@ -1297,6 +1297,146 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
         </div>
       </div>
 
+      {/* Seção: Distribuição por Tipo de Não Conformidade */}
+      <div id="section-nonconformity-distribution" className="bg-white p-5 rounded-xl card-shadow border border-slate-100 space-y-4 animate-in fade-in duration-200">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+          <div>
+            <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+              <Layers className="w-4 h-4 text-blue-500" />
+              <span>Distribuição de Chamados por Tipo de Não Conformidade</span>
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Análise quantitativa de chamados e volume de peças agrupados por categoria de desvio.
+            </p>
+          </div>
+          <div className="text-[10px] text-slate-400 font-mono font-bold uppercase hidden sm:block">
+            ISO 9001 &bull; ANÁLISE DE NÃO CONFORMIDADES
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+          {/* Bar Chart */}
+          <div className="xl:col-span-7 bg-slate-50/40 p-4 rounded-xl border border-slate-100">
+            <div className="h-64">
+              {issueTypeData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={issueTypeData}
+                    margin={{ top: 20, right: 10, left: -25, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis
+                      dataKey="name"
+                      fontSize={10}
+                      stroke="#64748b"
+                      tickLine={false}
+                    />
+                    <YAxis
+                      yAxisId="left"
+                      stroke="#3b82f6"
+                      fontSize={10}
+                      tickLine={false}
+                      allowDecimals={false}
+                      label={{ value: 'Chamados Registrados', angle: -90, position: 'insideLeft', fontSize: 9, fill: '#3b82f6', offset: 10 }}
+                    />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      stroke="#10b981"
+                      fontSize={10}
+                      tickLine={false}
+                      allowDecimals={false}
+                      label={{ value: 'Total de Peças Devolvidas', angle: 90, position: 'insideRight', fontSize: 9, fill: '#10b981', offset: 10 }}
+                    />
+                    <Tooltip
+                      formatter={(value, name) => {
+                        if (name === 'Qtd') return [`${value} chamados`, 'Chamados Registrados'];
+                        return [`${value} un`, 'Total de Peças Devolvidas'];
+                      }}
+                      contentStyle={{ fontSize: 11, borderRadius: 8 }}
+                    />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: 10 }} />
+                    <Bar
+                      yAxisId="left"
+                      dataKey="Qtd"
+                      name="Chamados Registrados"
+                      fill="#3b82f6"
+                      radius={[4, 4, 0, 0]}
+                      barSize={24}
+                    />
+                    <Bar
+                      yAxisId="right"
+                      dataKey="Pecas"
+                      name="Total de Peças"
+                      fill="#10b981"
+                      radius={[4, 4, 0, 0]}
+                      barSize={24}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-slate-400 text-xs italic">
+                  Aguardando dados de chamados...
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Table List / Cards */}
+          <div className="xl:col-span-5 space-y-3 flex flex-col justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Quadro de Frequência de Desvios</span>
+            
+            <div className="space-y-2.5 overflow-y-auto max-h-72 pr-1">
+              {issueTypeData.map((item) => {
+                const percentage = total > 0 ? Math.round((item.Qtd / total) * 100) : 0;
+                let colorClass = "bg-blue-500";
+                if (item.name === "Avaria") colorClass = "bg-amber-500";
+                if (item.name === "Defeito") colorClass = "bg-rose-500";
+                if (item.name === "Troca") colorClass = "bg-indigo-500";
+                if (item.name === "Erro de Logística") colorClass = "bg-sky-500";
+                if (item.name === "Outro") colorClass = "bg-slate-500";
+
+                return (
+                  <div key={item.name} className="bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-xl p-3 transition-all text-xs space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className={`w-2.5 h-2.5 rounded-full ${colorClass}`} />
+                        <h4 className="font-extrabold text-slate-800 text-xs truncate uppercase tracking-wider">{item.name}</h4>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[9.5px] font-black border uppercase tracking-wider bg-slate-100 text-slate-700">
+                        {percentage}% dos chamados
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-[10.5px] text-slate-600">
+                      <div>
+                        <span className="text-[9px] text-slate-400 uppercase font-bold block">Chamados</span>
+                        <strong className="text-slate-700">{item.Qtd} registros</strong>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 uppercase font-bold block">Peças Afetadas</span>
+                        <strong className="text-slate-700">{item.Pecas.toLocaleString('pt-BR')} un</strong>
+                      </div>
+                    </div>
+
+                    <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full ${colorClass}`}
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="bg-blue-50/60 border border-blue-100 p-2.5 rounded-xl text-[10.5px] leading-relaxed text-blue-950">
+              💡 <strong>Regra de Controle:</strong> Avarias e Erros de Logística costumam indicar problemas na cadeia logística (armazenagem ou transporte), enquanto Defeitos exigem revisão técnica direta de manufatura.
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Trend Timeline and Critical Alert row */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Trend Timeline: Monthly Evolution of opened/closed tickets by issue type */}
