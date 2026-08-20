@@ -517,7 +517,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
       ['Total de Peças Devolvidas', totalReturnedQuantity, 'Soma total de volumes danificados'],
       ['Taxa Geral de Retorno de Produção', `${averageReturnRate.toFixed(4)}%`, 'Percentual sobre volume total produzido'],
       ['Taxa em Chamados Abertos', `${averageOpenReturnRate.toFixed(4)}%`, 'Volume pendente de tratativa final'],
-      ['Tempo Médio de Resolução (SLA)', '32.5 horas', 'Meta de excelência: Máximo 48 horas'],
+      ['Tempo Médio de Resolução (SLA)', `${averageResolutionTimeHours.toFixed(1).replace('.', ',')} horas`, 'Meta de excelência: Máximo 48 horas'],
       ['Taxa de Reincidência de Defeitos', `${productRecurrenceRate}%`, 'Percentual de SKUs com reincidências de falhas']
     ];
 
@@ -743,6 +743,44 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
   
   const totalOpenTicketsQuantity = tickets.filter((t) => t.status === 'Aberto').reduce((acc, t) => acc + t.quantity, 0);
   const averageOpenReturnRate = totalProducedQuantity > 0 ? (totalOpenTicketsQuantity / totalProducedQuantity) * 100 : 0;
+
+  // Calculando o tempo médio de resolução real a partir dos chamados resolvidos/finalizados (SLA)
+  const averageResolutionTimeHours = React.useMemo(() => {
+    const resolvedTickets = tickets.filter(t => t.status === 'Resolvido' || t.status === 'Finalizado');
+    if (resolvedTickets.length === 0) {
+      return 32.5; // Valor padrão estimado se não houver chamados resolvidos/finalizados
+    }
+
+    let totalHours = 0;
+    let count = 0;
+
+    resolvedTickets.forEach((t) => {
+      const createdDate = new Date(t.createdAt);
+      let resolvedDate = new Date(t.updatedAt); // fallback padrão
+
+      // Procura no histórico o passo de resolução ou finalização mais recente
+      if (t.history && t.history.length > 0) {
+        const resolutionStep = [...t.history].reverse().find(
+          (h) =>
+            h.action.includes('Resolvido') ||
+            h.action.includes('Finalizado') ||
+            h.action.includes('Finalização')
+        );
+        if (resolutionStep && resolutionStep.timestamp) {
+          resolvedDate = new Date(resolutionStep.timestamp);
+        }
+      }
+
+      const diffMs = resolvedDate.getTime() - createdDate.getTime();
+      if (diffMs > 0) {
+        const diffHours = diffMs / (1000 * 60 * 60);
+        totalHours += diffHours;
+        count++;
+      }
+    });
+
+    return count > 0 ? parseFloat((totalHours / count).toFixed(1)) : 32.5;
+  }, [tickets, refreshTrigger]);
 
   // Status distribution for PieChart
   const statusData = [
@@ -1131,7 +1169,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
           </div>
           <div className="min-w-0">
             <h4 className="text-slate-800 font-semibold text-xs truncate">Tempo Médio Resolução (SLA)</h4>
-            <p className="text-xl font-black text-sky-850 mt-0.5">32,5h</p>
+            <p className="text-xl font-black text-sky-850 mt-0.5">
+              {averageResolutionTimeHours.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}h
+            </p>
             <p className="text-[10px] text-slate-500 truncate">Meta interna: Máximo 48h</p>
           </div>
         </div>

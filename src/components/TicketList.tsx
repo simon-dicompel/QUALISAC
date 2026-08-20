@@ -181,7 +181,7 @@ export const TicketList: React.FC<TicketListProps> = ({
     }
   };
 
-  // Color bar styling matching GLPI
+  // Color bar styling for issue types
   const getIssueColorLeftBorder = (issueType: IssueType) => {
     switch (issueType) {
       case 'Defeito':
@@ -499,7 +499,7 @@ export const TicketList: React.FC<TicketListProps> = ({
         )}
       </div>
 
-      {/* 4. Table Footer Pagination/Stat matching GLPI */}
+      {/* 4. Table Footer Pagination / Status legend */}
       <div className="p-3.5 border-t border-slate-200 bg-slate-55/40 text-xs text-slate-500 flex items-center justify-between">
         <p>Exibindo {filteredTickets.length} de {tickets.length} chamados do cliente corporativo.</p>
         <div className="flex gap-1">

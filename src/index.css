@@ -11,7 +11,7 @@ body {
   background-color: #f8fafc; /* slate-50 */
 }
 
-/* Custom scrollbars matching GLPI style */
+/* Custom modern scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

@@ -1032,7 +1032,7 @@ export default function App() {
                 SAC &amp; Qualidade
               </span>
             </div>
-            <p className="text-[10px] text-slate-500 font-semibold">Inspirado na arquitetura de tickets GLPI</p>
+            <p className="text-[10px] text-slate-500 font-semibold">Sistema Integrado de Chamados e Ocorrências</p>
           </div>
         </div>
 
@@ -1102,7 +1102,7 @@ export default function App() {
           
           <div className="space-y-6">
             <div>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Painéis GLPI</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Painéis do Sistema</p>
               
               <nav className="space-y-1.5">
                 {/* 1. Dashboard */}
