@@ -217,19 +217,10 @@ export const TicketList: React.FC<TicketListProps> = ({
               <button
                 id="new-ticket-btn"
                 onClick={onOpenNewTicketModal}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all shadow-sm shadow-blue-500/20 cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4.5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all shadow-sm shadow-blue-500/20 cursor-pointer"
+                title="Abrir novo chamado de SAC para devolução de produtos Simon Dicompel"
               >
                 <Plus className="w-4 h-4" />
-                <span>Novo chamado(QLD)</span>
-              </button>
-
-              <button
-                id="new-special-ticket-btn"
-                onClick={onOpenNewSpecialTicketModal}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-all shadow-sm shadow-indigo-500/20 cursor-pointer"
-                title="Abrir chamado com campos específicos: Revenda, Consumidor, Valor do Frete, PAC Reverso e UF Cadastrado"
-              >
-                <Sparkles className="w-4 h-4" />
                 <span>Novo Chamado (SAC)</span>
               </button>
             </>
@@ -406,10 +397,17 @@ export const TicketList: React.FC<TicketListProps> = ({
                     )}
                   </td>
                   <td className="px-6 py-4">
-                    <div className="font-semibold text-slate-800">{ticket.clientName}</div>
+                    <div className="font-semibold text-slate-800">{ticket.customerName || ticket.clientName || ticket.consumer}</div>
+                    {(ticket.resellerName || ticket.reseller) && (
+                      <div className="text-[10px] text-slate-500 font-medium mt-0.5">
+                        Revenda: <strong>{ticket.resellerName || ticket.reseller}</strong>
+                      </div>
+                    )}
                     <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
                       <Calendar className="w-3 h-3" />
-                      <span>Aberto em: {new Date(ticket.createdAt).toLocaleDateString()} {new Date(ticket.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span>
+                        {ticket.firstContactDate ? `1º Contato: ${new Date(ticket.firstContactDate + 'T12:00:00').toLocaleDateString('pt-BR')}` : `Aberto em: ${new Date(ticket.createdAt).toLocaleDateString()}`}
+                      </span>
                     </div>
                     {ticket.reminders && ticket.reminders.length > 0 && (
                       <div className="mt-1.5 flex items-center gap-1 text-[10px] bg-slate-50 border border-slate-200 text-slate-600 px-2 py-0.5 rounded-md w-max font-bold transition-all hover:bg-slate-100">
@@ -445,16 +443,33 @@ export const TicketList: React.FC<TicketListProps> = ({
                     ) : (
                       <>
                         <div className="font-medium text-slate-800 line-clamp-2" title={ticket.productName}>{ticket.productName}</div>
-                        <div className="text-[11px] text-slate-500 font-mono">Cód: {ticket.productCode}</div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[11px] text-slate-500 font-mono">Cód: {ticket.productCode}</span>
+                          <span className="px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                            {ticket.productLine || 'Simon 20'}
+                          </span>
+                        </div>
                       </>
                     )}
                   </td>
                   <td className="px-6 py-4">
-                    <span className="font-mono bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-0.5 rounded text-xs">
-                      {ticket.batch}
-                    </span>
-                    <div className="text-xs text-slate-600 mt-1">
-                      <strong>{ticket.quantity}</strong> pçs/unidades
+                    <div className="text-xs text-slate-700 font-bold">
+                      {ticket.quantity} unidades
+                    </div>
+                    {ticket.batch && (
+                      <span className="font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] block w-max mt-0.5">
+                        Lote: {ticket.batch}
+                      </span>
+                    )}
+                    <div className="flex flex-wrap items-center gap-1 mt-1 text-[9.5px]">
+                      <span className="font-mono font-bold bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded border border-slate-200 uppercase">
+                        UF: {ticket.returnUF || ticket.registeredUf || 'SP'}
+                      </span>
+                      {(ticket.pacReversoRequested === 'Sim' || ticket.requestedReversePac === 'Sim') && (
+                        <span className="font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1 py-0.2 rounded">
+                          PAC Reverso
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4">

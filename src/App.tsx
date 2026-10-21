@@ -318,49 +318,54 @@ export default function App() {
 
   // C. Open Return/Non-Conformity Ticket
   const handleCreateTicket = (data: {
+    customerName: string;
+    resellerName?: string;
+    firstContactDate: string;
+    clientName: string;
     productCode: string;
     productName: string;
-    batch?: string;
-    clientName: string;
-    issueType: IssueType;
-    subCategory?: string;
+    productLine: string;
     quantity: number;
-    description: string;
-    defects?: { id: string; description: string; quantity: number }[];
-    firstContactDate?: string;
+    batch?: string;
     invoiceNumber?: string;
-    items?: { id: string; productCode: string; productName: string; quantity: number }[];
-    // Novos campos específicos
+    notes?: string;
+    description: string;
+    issueType: string;
+    subCategory: string;
+    defects?: any[];
+    items?: any[];
+    freightCost?: number;
+    shippingValue?: number;
+    pacReversoRequested: string;
+    requestedReversePac?: string;
+    pacReversoCode?: string;
+    returnUF: string;
+    registeredUf?: string;
     reseller?: string;
     consumer?: string;
-    shippingValue?: number;
-    requestedReversePac?: string;
-    registeredUf?: string;
   }) => {
     if (!currentUser) return;
 
-    // Generate unique ID with prefix based on whether it is a Special Ticket (SAC) or Normal Ticket (QLD)
-    const isSpecial = isSpecialTicketMode || !!(data.reseller || data.consumer || data.shippingValue !== undefined || data.requestedReversePac || data.registeredUf);
-    const prefix = isSpecial ? 'SAC' : 'QLD';
-    
-    // Find the next unique sequential number
+    // SAC Ticket ID generation
+    const prefix = 'SAC';
     const samePrefixTickets = tickets.filter((t) => t.id.startsWith(prefix));
     let nextSeq = samePrefixTickets.length + 1;
     let newId = `${prefix}-${String(nextSeq).padStart(4, '0')}`;
-    
     while (tickets.some((t) => t.id === newId)) {
       nextSeq++;
       newId = `${prefix}-${String(nextSeq).padStart(4, '0')}`;
     }
 
     const timestamp = new Date().toISOString();
-
-    const specialDetails = [
-      data.reseller ? `Revenda: ${data.reseller}` : null,
-      data.consumer ? `Consumidor: ${data.consumer}` : null,
-      data.shippingValue !== undefined ? `Frete: R$ ${data.shippingValue.toFixed(2)}` : null,
-      data.requestedReversePac ? `PAC Reverso: ${data.requestedReversePac}` : null,
-      data.registeredUf ? `UF: ${data.registeredUf}` : null,
+    const sacDetails = [
+      data.resellerName ? `Revenda: ${data.resellerName}` : null,
+      data.customerName ? `Consumidor: ${data.customerName}` : null,
+      data.productLine ? `Linha: ${data.productLine}` : null,
+      data.invoiceNumber ? `NF: ${data.invoiceNumber}` : null,
+      data.freightCost !== undefined ? `Frete: R$ ${data.freightCost.toFixed(2)}` : null,
+      data.pacReversoRequested ? `PAC Reverso: ${data.pacReversoRequested}` : null,
+      data.pacReversoCode ? `Rastreio: ${data.pacReversoCode}` : null,
+      data.returnUF ? `UF: ${data.returnUF}` : null,
     ].filter(Boolean).join(', ');
 
     const newHist: HistoryStep = {
@@ -370,21 +375,36 @@ export default function App() {
       userId: currentUser.id,
       userName: currentUser.name,
       userRole: currentUser.role,
-      details: `SAC registrou devolução de ${data.quantity} unidades (${data.items && data.items.length > 1 ? `${data.items.length} SKUs` : data.productName}) por motivo de ${data.issueType}${data.subCategory ? ` (${data.subCategory})` : ''}. Lote: ${data.batch || 'Não Informado'}${specialDetails ? ` | [Campos Especiais] ${specialDetails}` : ''}`,
+      details: `SAC registrou devolução de ${data.quantity} unidades (${data.items && data.items.length > 1 ? `${data.items.length} SKUs` : data.productName}) por motivo de ${data.issueType}${data.subCategory ? ` (${data.subCategory})` : ''}. Lote: ${data.batch || 'Não Informado'}${sacDetails ? ` | [Dados SAC] ${sacDetails}` : ''}`,
       timestamp,
     };
 
     const newTicket: Ticket = {
       id: newId,
       tenantId: activeTenant.id,
+      customerName: data.customerName,
+      resellerName: data.resellerName,
+      clientName: data.customerName,
+      firstContactDate: data.firstContactDate,
       productCode: data.productCode,
       productName: data.productName,
+      productLine: data.productLine,
+      quantity: data.quantity,
       batch: data.batch,
-      clientName: data.clientName,
+      invoiceNumber: data.invoiceNumber,
+      notes: data.notes,
+      description: data.description,
       issueType: data.issueType,
       subCategory: data.subCategory,
-      quantity: data.quantity,
-      description: data.description,
+      defects: data.defects || [],
+      items: data.items,
+      freightCost: data.freightCost,
+      shippingValue: data.freightCost,
+      pacReversoRequested: data.pacReversoRequested,
+      requestedReversePac: data.pacReversoRequested,
+      pacReversoCode: data.pacReversoCode,
+      returnUF: data.returnUF,
+      registeredUf: data.returnUF,
       status: 'Aberto',
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -392,17 +412,9 @@ export default function App() {
       userName: currentUser.name,
       files: [],
       comments: [],
-      defects: data.defects || [],
       history: [newHist],
-      firstContactDate: data.firstContactDate,
-      invoiceNumber: data.invoiceNumber,
-      items: data.items,
-      // Mapeamento dos novos campos específicos
-      reseller: data.reseller,
-      consumer: data.consumer,
-      shippingValue: data.shippingValue,
-      requestedReversePac: data.requestedReversePac,
-      registeredUf: data.registeredUf,
+      reseller: data.resellerName,
+      consumer: data.customerName,
     };
 
     setTickets((prev) => [newTicket, ...prev]);

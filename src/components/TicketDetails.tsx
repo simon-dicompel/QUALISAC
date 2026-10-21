@@ -397,77 +397,95 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
               1. Identificação do Desvio e Dados de Entrada
             </h2>
             <div className="border border-slate-300 p-3 rounded space-y-3">
-              <div className="grid grid-cols-2 gap-4 text-xs">
-                <div className="space-y-1">
-                  <p className="text-slate-600"><span className="font-bold">Cliente / Reclamante:</span> {ticket.clientName}</p>
-                  <p className="text-slate-600"><span className="font-bold">Produto Principal:</span> {ticket.productName}</p>
-                  <p className="text-slate-600"><span className="font-bold">Código SKU:</span> {ticket.productCode}</p>
-                  <p className="text-slate-600"><span className="font-bold">Nota Fiscal:</span> {ticket.invoiceNumber || 'Não informada'}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-slate-600"><span className="font-bold">Lote Rastreável (Batch):</span> {ticket.batch || 'Não Informado'}</p>
-                  <p className="text-slate-600"><span className="font-bold">Qtd Afetada / Devolvida:</span> {ticket.quantity} unidades</p>
-                  <p className="text-slate-600"><span className="font-bold">Classificação da Ocorrência:</span> {ticket.issueType}{ticket.subCategory ? ` - ${ticket.subCategory}` : ''}</p>
-                  <p className="text-slate-600"><span className="font-bold">Data 1º Contato:</span> {ticket.firstContactDate ? new Date(ticket.firstContactDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Não informada'}</p>
+              {/* Informações do Cliente */}
+              <div>
+                <span className="font-bold text-[10px] text-slate-500 uppercase tracking-wider block mb-1">Informações do Cliente</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-2.5 rounded border border-slate-200">
+                  <p className="text-slate-700"><span className="font-bold text-slate-900">Consumidor Final:</span> {ticket.customerName || ticket.clientName || ticket.consumer}</p>
+                  <p className="text-slate-700"><span className="font-bold text-slate-900">Nome da Revenda:</span> {ticket.resellerName || ticket.reseller || 'Não informada (Opcional)'}</p>
+                  <p className="text-slate-700"><span className="font-bold text-slate-900">Data 1º Contato:</span> {ticket.firstContactDate ? new Date(ticket.firstContactDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Não informada'}</p>
                 </div>
               </div>
 
-              {/* Campos Específicos para Chamado Especial */}
-              {(ticket.reseller || ticket.consumer || ticket.shippingValue !== undefined || ticket.requestedReversePac || ticket.registeredUf) && (
-                <div className="mt-3 pt-3 border-t border-slate-200">
-                  <div className="bg-indigo-50/50 border border-indigo-100 p-3 rounded-lg space-y-2">
-                    <span className="font-extrabold text-[10px] text-indigo-900 uppercase font-mono flex items-center gap-1.5">
-                      <span className="w-2 h-2 bg-indigo-600 rounded-full"></span>
-                      <span>Informações Adicionais do Chamado Especial:</span>
-                    </span>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-xs">
-                      {ticket.reseller && (
-                        <div>
-                          <span className="text-[10px] text-slate-500 font-bold uppercase block">Revenda</span>
-                          <strong className="text-slate-800">{ticket.reseller}</strong>
-                        </div>
-                      )}
-                      {ticket.consumer && (
-                        <div>
-                          <span className="text-[10px] text-slate-500 font-bold uppercase block">Consumidor</span>
-                          <strong className="text-slate-800">{ticket.consumer}</strong>
-                        </div>
-                      )}
-                      {ticket.shippingValue !== undefined && (
-                        <div>
-                          <span className="text-[10px] text-slate-500 font-bold uppercase block">Valor Frete</span>
-                          <strong className="text-slate-800">
-                            R$ {ticket.shippingValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </strong>
-                        </div>
-                      )}
-                      {ticket.requestedReversePac && (
-                        <div>
-                          <span className="text-[10px] text-slate-500 font-bold uppercase block">PAC Reverso Solicitado</span>
-                          <strong className="text-slate-800">{ticket.requestedReversePac}</strong>
-                        </div>
-                      )}
-                      {ticket.registeredUf && (
-                        <div>
-                          <span className="text-[10px] text-slate-500 font-bold uppercase block">UF Cadastrado</span>
-                          <strong className="text-slate-800 uppercase">{ticket.registeredUf}</strong>
-                        </div>
-                      )}
-                    </div>
+              {/* Informações do Produto Devolvido */}
+              <div>
+                <span className="font-bold text-[10px] text-slate-500 uppercase tracking-wider block mb-1">Descrição dos Produtos Devolvidos</span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs border border-slate-200 p-2.5 rounded-t bg-white">
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Código do Produto</span>
+                    <strong className="text-slate-900 font-mono">{ticket.productCode}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Descrição</span>
+                    <strong className="text-slate-900">{ticket.productName}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Linha do Produto</span>
+                    <strong className="text-blue-800">{ticket.productLine || 'Simon 20'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Quantidade Devolvida</span>
+                    <strong className="text-slate-900">{ticket.quantity} unidades</strong>
                   </div>
                 </div>
-              )}
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs border border-slate-200 border-t-0 p-2.5 rounded-b bg-slate-50/50">
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Defeito (Categoria PAI)</span>
+                    <strong className="text-slate-800">{ticket.issueType}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Defeito (SUB Categoria)</span>
+                    <strong className="text-slate-800">{ticket.subCategory || 'Geral'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Nota Fiscal</span>
+                    <strong className="text-slate-900 font-mono">{ticket.invoiceNumber || 'Não informada'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Lote (Rastreável)</span>
+                    <strong className="text-slate-800 font-mono">{ticket.batch || 'Não Informado'}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Informações Logísticas / Devolução */}
+              <div>
+                <span className="font-bold text-[10px] text-slate-500 uppercase tracking-wider block mb-1">Informações Logísticas e Devolução</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-2.5 rounded border border-slate-200">
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Valor de Frete</span>
+                    <strong className="text-slate-800">
+                      {ticket.freightCost !== undefined ? `R$ ${ticket.freightCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : (ticket.shippingValue !== undefined ? `R$ ${ticket.shippingValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Não informado (Opcional)')}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Solicitado PAC Reverso</span>
+                    <strong className="text-slate-800">
+                      {ticket.pacReversoRequested || ticket.requestedReversePac || 'Não'}
+                      {ticket.pacReversoCode ? ` (${ticket.pacReversoCode})` : ''}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">UF da Devolução</span>
+                    <strong className="text-slate-800 font-mono uppercase">{ticket.returnUF || ticket.registeredUf || 'SP'}</strong>
+                  </div>
+                </div>
+              </div>
 
               {ticket.items && ticket.items.length > 0 && (
                 <div className="border-t border-slate-200 pt-3">
-                  <span className="font-bold text-[10px] text-slate-800 uppercase font-mono block mb-1.5">Lista Completa de SKUs Devolvidos neste Chamado:</span>
+                  <span className="font-bold text-[10px] text-slate-800 uppercase font-mono block mb-1.5">Lista Completa de Produtos Devolvidos neste Chamado:</span>
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse border border-slate-300 text-[10px] text-left">
                       <thead>
                         <tr className="bg-slate-50">
                           <th className="border border-slate-300 p-1.5 font-bold">Código SKU</th>
-                          <th className="border border-slate-300 p-1.5 font-bold">Nome do Produto</th>
-                          <th className="border border-slate-300 p-1.5 font-bold text-center w-28">Quantidade</th>
+                          <th className="border border-slate-300 p-1.5 font-bold">Descrição do Produto</th>
+                          <th className="border border-slate-300 p-1.5 font-bold">Linha</th>
+                          <th className="border border-slate-300 p-1.5 font-bold">Defeito (PAI &gt; SUB)</th>
+                          <th className="border border-slate-300 p-1.5 font-bold">NF</th>
+                          <th className="border border-slate-300 p-1.5 font-bold text-center w-20">Qtd</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -475,11 +493,14 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                           <tr key={item.id} className="hover:bg-slate-55">
                             <td className="border border-slate-300 p-1.5 font-mono font-bold text-slate-900">{item.productCode}</td>
                             <td className="border border-slate-300 p-1.5 text-slate-700">{item.productName}</td>
+                            <td className="border border-slate-300 p-1.5 font-semibold text-blue-700">{item.productLine || 'Simon 20'}</td>
+                            <td className="border border-slate-300 p-1.5 text-slate-700">{item.defectCategory || ticket.issueType} &gt; {item.defectSubcategory || ticket.subCategory || 'Geral'}</td>
+                            <td className="border border-slate-300 p-1.5 font-mono text-slate-700">{item.invoiceNumber || ticket.invoiceNumber || '-'}</td>
                             <td className="border border-slate-300 p-1.5 text-center font-bold font-mono text-slate-800">{item.quantity} un</td>
                           </tr>
                         ))}
                         <tr className="bg-slate-100 font-bold">
-                          <td colSpan={2} className="border border-slate-300 p-1.5 text-right text-slate-700">Quantidade Total Combinada:</td>
+                          <td colSpan={5} className="border border-slate-300 p-1.5 text-right text-slate-700">Quantidade Total Combinada:</td>
                           <td className="border border-slate-300 p-1.5 text-center font-mono text-blue-700 font-bold">{ticket.items.reduce((sum, item) => sum + item.quantity, 0)} un</td>
                         </tr>
                       </tbody>
@@ -713,12 +734,13 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
               <div className="text-[10px] text-slate-600 mt-1 space-y-0.5">
                 <p><span className="font-bold">ID SAC:</span> {ticket.id}</p>
                 <p><span className="font-bold">Nota Fiscal:</span> {ticket.invoiceNumber || 'Não informada'}</p>
-                <p><span className="font-bold">Lote:</span> {ticket.batch || 'Não Informado'}</p>
-                {ticket.reseller && <p><span className="font-bold">Revenda:</span> {ticket.reseller}</p>}
-                {ticket.consumer && <p><span className="font-bold">Consumidor:</span> {ticket.consumer}</p>}
-                {ticket.shippingValue !== undefined && <p><span className="font-bold">Frete:</span> R$ {ticket.shippingValue.toFixed(2)}</p>}
-                {ticket.requestedReversePac && <p><span className="font-bold">PAC Reverso:</span> {ticket.requestedReversePac}</p>}
-                {ticket.registeredUf && <p><span className="font-bold">UF:</span> {ticket.registeredUf}</p>}
+                {(ticket.resellerName || ticket.reseller) && <p><span className="font-bold">Revenda:</span> {ticket.resellerName || ticket.reseller}</p>}
+                <p><span className="font-bold">Consumidor:</span> {ticket.customerName || ticket.consumer || ticket.clientName}</p>
+                {(ticket.freightCost !== undefined || ticket.shippingValue !== undefined) && (
+                  <p><span className="font-bold">Frete:</span> R$ {Number(ticket.freightCost !== undefined ? ticket.freightCost : ticket.shippingValue).toFixed(2)}</p>
+                )}
+                <p><span className="font-bold">PAC Reverso:</span> {ticket.pacReversoRequested || ticket.requestedReversePac || 'Não'}</p>
+                <p><span className="font-bold">UF Devolução:</span> {ticket.returnUF || ticket.registeredUf || 'SP'}</p>
                 {ticket.items && ticket.items.length > 0 ? (
                   <div className="mt-1 pt-1 border-t border-slate-100 space-y-0.5">
                     <span className="font-bold text-[9px] text-slate-500 uppercase tracking-wider block">Itens Devolvidos ({ticket.items.length}):</span>
@@ -904,118 +926,162 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
             </div>
 
             <div className="p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Cód. Produto</label>
-                  <p className="font-mono text-sm font-bold text-slate-800 mt-0.5">{ticket.productCode}</p>
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Lote (Rastreável)</label>
-                  <p className="font-mono text-sm font-bold text-slate-800 mt-0.5">{ticket.batch || 'Não informado'}</p>
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Tipo de Ocorrência</label>
-                  <p className="text-sm font-semibold mt-0.5 text-rose-700 bg-rose-50 border border-rose-100 rounded px-2 py-0.5 w-max">
-                    {ticket.issueType}{ticket.subCategory ? ` - ${ticket.subCategory}` : ''}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Faturamento (Qtd Devolvida)</label>
-                  <p className="text-sm font-bold text-slate-800 mt-0.5">{ticket.quantity} unidades</p>
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Data do 1º Contato</label>
-                  <p className="text-sm font-bold text-slate-800 mt-0.5">
-                    {ticket.firstContactDate ? new Date(ticket.firstContactDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Não informada'}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Número da Nota Fiscal</label>
-                  <p className="font-mono text-sm font-bold text-slate-800 mt-0.5">
-                    {ticket.invoiceNumber || 'Não informada'}
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-400 uppercase">Cliente Emitente</label>
-                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-150 text-slate-700 text-xs font-semibold mt-0.5">
-                  {ticket.clientName}
+              {/* 1. Informações do Cliente */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">
+                  1. Informações do Cliente
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Consumidor Final</label>
+                    <p className="font-bold text-slate-800 text-sm mt-0.5">
+                      {ticket.customerName || ticket.clientName || ticket.consumer}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Nome da Revenda</label>
+                    <p className="font-semibold text-slate-700 text-xs mt-0.5">
+                      {ticket.resellerName || ticket.reseller || <span className="text-slate-400 italic font-normal">Não informada (Opcional)</span>}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Data do 1º Contato</label>
+                    <p className="font-medium text-slate-700 text-xs mt-0.5">
+                      {ticket.firstContactDate ? new Date(ticket.firstContactDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Não informada'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Número da Nota Fiscal</label>
+                    <p className="font-mono text-xs font-bold text-slate-800 mt-0.5">
+                      {ticket.invoiceNumber || <span className="text-slate-400 italic font-normal">Não informada</span>}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="text-[11px] font-bold text-slate-400 uppercase">Descrição Histórica do Reclame</label>
-                <p className="text-xs text-slate-600 leading-relaxed bg-slate-50/50 p-3.5 rounded-xl border border-slate-150 mt-1 whitespace-pre-wrap">
-                  {ticket.description}
-                </p>
+              {/* 2. Descrição dos Produtos Devolvidos */}
+              <div className="border border-slate-200 rounded-xl p-3.5 space-y-3">
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">
+                  2. Produtos Devolvidos & Defeito
+                </span>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Cód. Produto</label>
+                    <p className="font-mono text-sm font-bold text-slate-800 mt-0.5">{ticket.productCode}</p>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Linha do Produto</label>
+                    <p className="mt-0.5">
+                      <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200">
+                        {ticket.productLine || 'Simon 20'}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Descrição do Produto</label>
+                    <p className="font-medium text-slate-800 text-xs mt-0.5">{ticket.productName}</p>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Quantidade Devolvida</label>
+                    <p className="font-bold text-slate-800 text-sm mt-0.5">{ticket.quantity} unidades</p>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Lote Rastreável</label>
+                    <p className="font-mono text-xs font-semibold text-slate-700 mt-0.5">{ticket.batch || 'Não informado'}</p>
+                  </div>
+                </div>
+
+                {/* Defeito: Categoria PAI e SUB Categoria */}
+                <div className="p-2.5 rounded-lg bg-amber-50/70 border border-amber-200 space-y-1.5 text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-900 text-[11px]">
+                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                    <span>Defeito Classificado (Categoria PAI &gt; SUB Categoria)</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-amber-900 font-medium">
+                    <span className="font-bold bg-white px-2 py-0.5 rounded border border-amber-200">{ticket.issueType}</span>
+                    <span className="text-slate-400">&gt;</span>
+                    <span className="font-semibold bg-white px-2 py-0.5 rounded border border-amber-200">{ticket.subCategory || 'Geral'}</span>
+                  </div>
+                </div>
+
+                {/* Observação / Relato */}
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Observação da Ocorrência</label>
+                  <p className="text-xs text-slate-600 leading-relaxed bg-slate-50/50 p-2.5 rounded-lg border border-slate-150 mt-1 whitespace-pre-wrap">
+                    {ticket.notes || ticket.description}
+                  </p>
+                </div>
+
+                {/* Lista de múltiplos itens adicionais devolvidos */}
+                {ticket.items && ticket.items.length > 1 && (
+                  <div className="pt-2 border-t border-slate-150 space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-600 uppercase block">
+                      Lista de Produtos Devolvidos ({ticket.items.length} SKUs):
+                    </span>
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                      {ticket.items.map((item, idx) => (
+                        <div key={item.id || idx} className="p-2 bg-slate-50 rounded-lg border border-slate-200 text-xs flex justify-between items-center gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono font-bold text-slate-800 bg-white px-1.5 py-0.5 rounded border border-slate-200 text-[10px]">
+                                {item.productCode}
+                              </span>
+                              <span className="text-slate-700 font-medium truncate">{item.productName}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">
+                              Linha: <strong className="text-blue-700">{item.productLine || 'Simon 20'}</strong> | Defeito: {item.defectCategory || ticket.issueType} &gt; {item.defectSubcategory || ticket.subCategory}
+                              {item.notes && <span className="italic ml-1">(Obs: {item.notes})</span>}
+                            </div>
+                          </div>
+                          <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-[11px] shrink-0">
+                            {item.quantity} un
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Campos Específicos para Chamado Especial no modo interativo */}
-              {(ticket.reseller || ticket.consumer || ticket.shippingValue !== undefined || ticket.requestedReversePac || ticket.registeredUf) && (
-                <div className="pt-3 border-t border-slate-100">
-                  <label className="text-[11px] font-bold text-indigo-500 uppercase tracking-wider block mb-2 font-mono flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-pulse"></span>
-                    <span>Informações Adicionais do Chamado Especial</span>
-                  </label>
-                  <div className="bg-indigo-50/40 border border-indigo-100 p-3.5 rounded-xl space-y-3">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
-                      {ticket.reseller && (
-                        <div>
-                          <span className="text-[10px] text-slate-500 font-bold uppercase block">Revenda</span>
-                          <strong className="text-slate-800 font-bold text-xs">{ticket.reseller}</strong>
-                        </div>
-                      )}
-                      {ticket.consumer && (
-                        <div>
-                          <span className="text-[10px] text-slate-500 font-bold uppercase block">Consumidor</span>
-                          <strong className="text-slate-800 font-bold text-xs">{ticket.consumer}</strong>
-                        </div>
-                      )}
-                      {ticket.shippingValue !== undefined && (
-                        <div>
-                          <span className="text-[10px] text-slate-500 font-bold uppercase block">Valor Frete</span>
-                          <strong className="text-slate-800 font-bold text-xs">
-                            R$ {ticket.shippingValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </strong>
-                        </div>
-                      )}
-                      {ticket.requestedReversePac && (
-                        <div>
-                          <span className="text-[10px] text-slate-500 font-bold uppercase block">PAC Reverso</span>
-                          <strong className="text-slate-800 font-bold text-xs">{ticket.requestedReversePac}</strong>
-                        </div>
-                      )}
-                      {ticket.registeredUf && (
-                        <div>
-                          <span className="text-[10px] text-slate-500 font-bold uppercase block">UF Cadastrado</span>
-                          <strong className="text-slate-800 font-bold text-xs uppercase">{ticket.registeredUf}</strong>
-                        </div>
+              {/* 3. Informações Logísticas e Devolução */}
+              <div className="bg-indigo-50/30 border border-indigo-150 rounded-xl p-3.5 space-y-2">
+                <span className="text-[10px] font-black text-indigo-900 uppercase tracking-wider block">
+                  3. Logística e Devolução
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Valor de Frete</label>
+                    <p className="font-bold text-slate-800 text-xs mt-0.5">
+                      {ticket.freightCost !== undefined ? `R$ ${ticket.freightCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : (ticket.shippingValue !== undefined ? `R$ ${ticket.shippingValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Não informado (Opcional)')}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">PAC Reverso</label>
+                    <div className="mt-0.5">
+                      <span className={`px-2 py-0.5 rounded text-[11px] font-bold inline-block ${
+                        (ticket.pacReversoRequested === 'Sim' || ticket.requestedReversePac === 'Sim')
+                          ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                          : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {ticket.pacReversoRequested || ticket.requestedReversePac || 'Não'}
+                      </span>
+                      {ticket.pacReversoCode && (
+                        <p className="font-mono text-[10px] text-blue-700 mt-0.5">
+                          Rastreio: {ticket.pacReversoCode}
+                        </p>
                       )}
                     </div>
                   </div>
-                </div>
-              )}
-
-              {/* Defects breakdown list */}
-              {ticket.defects && ticket.defects.length > 0 && (
-                <div className="pt-3 border-t border-slate-100">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Detalhamento de Peças e Defeitos</label>
-                  <div className="space-y-1.5 bg-slate-50/50 p-3 rounded-xl border border-slate-150">
-                    {ticket.defects.map((def, idx) => (
-                      <div key={def.id || idx} className="flex items-center justify-between text-xs py-1.5 px-2 bg-white border border-slate-100 rounded-lg shadow-2xs">
-                        <span className="text-slate-600 font-medium">{def.description}</span>
-                        <span className="font-mono font-bold text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md text-[10px] shrink-0">
-                          {def.quantity} peças / unidades
-                        </span>
-                      </div>
-                    ))}
-                    <div className="text-[10px] text-right font-bold text-slate-500 pt-1">
-                      Volume total detalhado: <strong className="text-slate-800 font-extrabold">{ticket.defects.reduce((sum, d) => sum + d.quantity, 0)}</strong> un
-                    </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">UF da Devolução</label>
+                    <p className="mt-0.5">
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-white font-mono font-bold text-xs uppercase">
+                        {ticket.returnUF || ticket.registeredUf || 'SP'}
+                      </span>
+                    </p>
                   </div>
                 </div>
-              )}
+              </div>
 
               {/* Created by */}
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">

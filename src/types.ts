@@ -22,8 +22,8 @@ export type IssueType = string;
 
 export interface IssueTypeCategory {
   id: string;
-  name: string;
-  subcategories: string[];
+  name: string; // Categoria Pai
+  subcategories: string[]; // Subcategorias (Filho)
 }
 
 export type TicketStatus = 'Aberto' | 'Em analise' | 'Em tratativa' | 'Resolvido' | 'Finalizado';
@@ -71,13 +71,20 @@ export interface TicketDefect {
   id: string;
   description: string; // e.g. "Mau contato", "Sem parafuso", "Peca riscada"
   quantity: number;
+  category?: string; // Categoria Pai
+  subcategory?: string; // Subcategoria
 }
 
 export interface TicketItem {
   id: string;
   productCode: string;
   productName: string;
+  productLine?: string; // Linha do Produto que está sendo devolvida (ex: Simon 19, 20, 30, etc.)
   quantity: number;
+  defectCategory?: string; // Defeito - Categoria PAI
+  defectSubcategory?: string; // Defeito - SUB categoria
+  notes?: string; // Observação específica do item
+  invoiceNumber?: string; // Número da Nota Fiscal
 }
 
 export interface TicketReminder {
@@ -92,34 +99,55 @@ export interface TicketReminder {
 export interface Ticket {
   id: string;
   tenantId: string;
-  productCode: string;
-  productName: string;
+  
+  // Informações do Cliente
+  clientName: string; // Consumidor / Cliente (mantido para compatibilidade total)
+  customerName: string; // Nome do Consumidor final (obrigatório)
+  resellerName?: string; // Nome da Revenda (não obrigatória)
+  firstContactDate: string; // Data do Primeiro contato
+
+  // Descrição do Produto Devolvido Principal
+  productCode: string; // Código do Produto
+  productName: string; // Descrição do Produto
+  productLine?: string; // Linha do Produto que está sendo devolvida
+  quantity: number; // Quantidade Devolvida
   batch?: string; // Lote (opcional)
-  clientName: string;
-  issueType: IssueType;
-  subCategory?: string;
-  quantity: number;
-  description: string;
+  invoiceNumber?: string; // Número da Nota Fiscal
+  notes?: string; // Observação
+  description: string; // Observação e relato detalhado
+
+  // Defeito (Categoria PAI e SUB Categoria)
+  issueType: IssueType; // Categoria PAI do defeito
+  subCategory?: string; // SUB categoria do defeito
+  defects?: TicketDefect[];
+
+  // Multiplos SKUs / Produtos Devolvidos no mesmo chamado
+  items?: TicketItem[];
+
+  // Informações Logísticas / Devolução
+  freightCost?: number; // Valor de Frete (opcional)
+  shippingValue?: number; // compatibilidade
+  pacReversoRequested: boolean | string; // Solicitado o PAC Reverso ('Sim' | 'Não')
+  requestedReversePac?: string; // compatibilidade
+  pacReversoCode?: string; // Código de autorização ou rastreio do PAC Reverso (se houver)
+  returnUF: string; // UF da Devolução (ex: SP, SC, MG, RJ...)
+  registeredUf?: string; // compatibilidade
+
+  // Controle de Ciclo de Vida do Chamado
   status: TicketStatus;
   createdAt: string;
   updatedAt: string;
-  userId: string; // SAC who opened it
-  userName: string; // SAC name
+  userId: string; // Atendente SAC que abriu o chamado
+  userName: string; // Nome do atendente SAC
   files: TicketFile[];
   comments: TicketComment[];
   qualityReport?: QualityReport;
-  defects?: TicketDefect[];
   reminders?: TicketReminder[];
   history: HistoryStep[];
-  firstContactDate?: string; // Data do primeiro contato do cliente
-  invoiceNumber?: string; // Número da nota fiscal
-  items?: TicketItem[];
-  // Novos campos específicos
-  reseller?: string; // Revenda
-  consumer?: string; // Consumidor
-  shippingValue?: number; // Valor Frete
-  requestedReversePac?: string; // Solicitado PAC Reverso (Ex: 'Sim' | 'Não')
-  registeredUf?: string; // UF cadastrado
+
+  // Campos legados para compatibilidade reversa
+  reseller?: string;
+  consumer?: string;
 }
 
 export interface SystemEmailLog {
@@ -139,6 +167,5 @@ export interface Product {
   code: string; // SKU code
   name: string; // Descriptive name
   producedQty?: number; // Total quantity produced
-  line?: string; // Product line (e.g., "Novara")
+  line?: string; // Product line (e.g., "Simon 19", "Simon 20", "Simon 30", "Simon 35", "Simon Connect", "Novara")
 }
-
