@@ -385,8 +385,8 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 <strong className="text-slate-800 font-bold">{new Date(ticket.updatedAt).toLocaleDateString()}</strong>
               </div>
               <div>
-                <span className="text-slate-500 block uppercase font-bold text-[8px]">Locatário (Tenant)</span>
-                <strong className="text-slate-800 font-bold">Tenant ID: {ticket.tenantId}</strong>
+                <span className="text-slate-500 block uppercase font-bold text-[8px]">Empresa</span>
+                <strong className="text-slate-800 font-bold">Simon Dicompel</strong>
               </div>
             </div>
           </div>

@@ -336,7 +336,7 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
           </span>
           <h2 className="text-xl font-bold text-slate-800 tracking-tight">Configurações Gerais do Sistema</h2>
           <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
-            Painel exclusivo de Administradores para gerenciamento de catálogos de produtos, parametrização operacional de tipos de não conformidades (regras corporativas) e controle de acessos SaaS.
+            Painel exclusivo de Administradores para gerenciamento de catálogos de produtos, parametrização operacional de tipos de não conformidades (regras corporativas) e controle de acessos e colaboradores.
           </p>
         </div>
         
@@ -944,7 +944,7 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
                 <span>Registrar Novo Usuário</span>
               </h3>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                Crie credenciais e atribua perfis específicos para operar sob as tenants SaaS.
+                Crie credenciais e atribua perfis operacionais específicos para colaboradores da empresa.
               </p>
             </div>
 
@@ -994,37 +994,19 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-1">
-                <div>
-                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-0.5">Perfil / Role Operatório *</label>
-                  <select
-                    id="reg-user-role"
-                    value={newUserRole}
-                    onChange={(e) => setNewUserRole(e.target.value as UserRole)}
-                    className="w-full px-2 py-1.5 border border-slate-250 rounded-lg text-xs bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold"
-                  >
-                    <option value="COMUM">COMUM (Leitura)</option>
-                    <option value="SAC">SAC (Aberturas)</option>
-                    <option value="QUALIDADE">QUALIDADE (Laudo)</option>
-                    <option value="ADMIN">ADMINISTRADOR</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-0.5">Filial SaaS Tenant *</label>
-                  <select
-                    id="reg-user-tenant"
-                    value={newUserTenant}
-                    onChange={(e) => setNewUserTenant(e.target.value)}
-                    className="w-full px-2 py-1.5 border border-slate-250 rounded-lg text-xs bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {tenants.map((ten) => (
-                      <option key={ten.id} value={ten.id}>
-                        🏢 {ten.name.substring(0, 16)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-0.5">Perfil / Role Operatório *</label>
+                <select
+                  id="reg-user-role"
+                  value={newUserRole}
+                  onChange={(e) => setNewUserRole(e.target.value as UserRole)}
+                  className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold"
+                >
+                  <option value="COMUM">COMUM (Leitura)</option>
+                  <option value="SAC">SAC (Aberturas)</option>
+                  <option value="QUALIDADE">QUALIDADE (Laudo)</option>
+                  <option value="ADMIN">ADMINISTRADOR</option>
+                </select>
               </div>
 
               <button
@@ -1057,14 +1039,11 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
                     <th className="py-2.5 px-3">Nome</th>
                     <th className="py-2.5 px-3">E-mail Operacional</th>
                     <th className="py-2.5 px-3">Perfil</th>
-                    <th className="py-2.5 px-3">Empresa/Tenant</th>
                     <th className="py-2.5 px-3 text-right">Ação</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {users.map((u) => {
-                    const matchedTenant = tenants.find((t) => t.id === u.tenantId);
-                    
                     return (
                       <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="py-3 px-3">
@@ -1087,12 +1066,6 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
                           }`}>
                             {u.role}
                           </span>
-                        </td>
-                        <td className="py-3 px-3">
-                          <div className="flex items-center gap-1 text-[11px] text-slate-700 font-medium">
-                            <Building className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span>{matchedTenant ? matchedTenant.name : 'Outro Cliente'}</span>
-                          </div>
                         </td>
                         <td className="py-3 px-3 text-right">
                           {deletingUserId === u.id ? (

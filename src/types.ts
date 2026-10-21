@@ -6,7 +6,7 @@ export interface User {
   email: string;
   role: UserRole;
   passwordHash?: string; // stored simple password
-  tenantId: string; // for SaaS multi-client support
+  tenantId: string;
 }
 
 export interface Tenant {
@@ -91,7 +91,7 @@ export interface TicketReminder {
 
 export interface Ticket {
   id: string;
-  tenantId: string; // SaaS support
+  tenantId: string;
   productCode: string;
   productName: string;
   batch?: string; // Lote (opcional)

@@ -1035,7 +1035,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
           <div>
             <h1 className="text-xl font-bold text-slate-900">QualiSAC - Gestão de Não Conformidades ISO 9001</h1>
             <p className="text-xs text-slate-600 mt-1 font-semibold">
-              Locatário Ativo: <span className="font-bold text-slate-800">{activeTenant.name}</span> ({activeTenant.plan} Plan &bull; {activeTenant.status})
+              Empresa: <span className="font-bold text-slate-800">Simon Dicompel</span>
             </p>
           </div>
           <div className="text-right text-[10px] text-slate-500 font-mono">
@@ -1053,7 +1053,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
             <span>Dashboard Gerencial &amp; Métricas de Qualidade</span>
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Análise agregada de chamados, prazos de tratamento e desvios de mercadorias correspondentes ao seu tenant.
+            Análise agregada de chamados, prazos de tratamento e desvios de mercadorias Simon Dicompel.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
@@ -1090,7 +1090,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
           <button
             onClick={handleExportCSV}
             className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-900 border border-slate-750 text-white font-bold text-xs rounded-lg transition-all shadow-xs cursor-pointer uppercase"
-            title="Exportar dados brutos de todos os chamados deste tenant para planilha externa"
+            title="Exportar dados brutos de todos os chamados para planilha externa"
           >
             <Download className="w-4 h-4 text-emerald-450" />
             <span>Exportar Chamados</span>
@@ -1767,7 +1767,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
               <span>Taxa de Reincidência de Defeitos</span>
             </h3>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Identificação de produtos/SKUs com reclamações recorrentes no mesmo tenant atual.
+              Identificação de produtos/SKUs com reclamações recorrentes no sistema.
             </p>
           </div>
           <div className="bg-rose-50 border border-rose-100 text-rose-700 rounded-lg px-3 py-1 text-center shrink-0">
@@ -1883,7 +1883,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tickets, products 
                 </ResponsiveContainer>
               ) : (
                 <div className="h-full flex items-center justify-center text-slate-400 text-xs italic">
-                  💡 Excelente! Nenhum produto do seu tenant possui mais de um chamado registrado (0% de reincidência).
+                  💡 Excelente! Nenhum produto possui mais de um chamado registrado (0% de reincidência).
                 </div>
               )}
             </div>
