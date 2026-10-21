@@ -31,7 +31,7 @@ export const INITIAL_ISSUE_TYPES: IssueTypeCategory[] = [
 export const INITIAL_TENANTS: Tenant[] = [
   {
     id: 'tenant_1',
-    name: 'Alimentos Estrela S/A',
+    name: 'Dicompel Indústria e Comércio',
     plan: 'Enterprise',
     status: 'Ativo',
     createdAt: '2025-01-15T10:00:00Z',
@@ -63,55 +63,6 @@ export const INITIAL_USERS: User[] = [
     role: 'ADMIN',
     passwordHash: 'Dicompel!@#2026',
     tenantId: 'tenant_1',
-  },
-  {
-    id: 'user_admin',
-    name: 'Carlos Silva',
-    email: 'admin@quali.com',
-    role: 'ADMIN',
-    passwordHash: 'admin', // Simple for demonstration/login
-    tenantId: 'tenant_1',
-  },
-  {
-    id: 'user_sac',
-    name: 'Juliana Souza',
-    email: 'sac@quali.com',
-    role: 'SAC',
-    passwordHash: 'sac',
-    tenantId: 'tenant_1',
-  },
-  {
-    id: 'user_qualidade',
-    name: 'Marcos Oliveira',
-    email: 'qualidade@quali.com',
-    role: 'QUALIDADE',
-    passwordHash: 'quali',
-    tenantId: 'tenant_1',
-  },
-  {
-    id: 'user_comum',
-    name: 'Rodrigo Costa',
-    email: 'comum@quali.com',
-    role: 'COMUM',
-    passwordHash: 'comum',
-    tenantId: 'tenant_1',
-  },
-  // Users for other tenants to show multi-client isolation
-  {
-    id: 'user_metal_admin',
-    name: 'Roberto Ferro',
-    email: 'roberto@progresso.com',
-    role: 'ADMIN',
-    passwordHash: 'roberto',
-    tenantId: 'tenant_2',
-  },
-  {
-    id: 'user_metal_qual',
-    name: 'Aline Metal',
-    email: 'aline@progresso.com',
-    role: 'QUALIDADE',
-    passwordHash: 'aline',
-    tenantId: 'tenant_2',
   },
 ];
 

@@ -15,7 +15,6 @@ import {
   TicketReminder
 } from './types';
 import { INITIAL_USERS, INITIAL_TENANTS, INITIAL_TICKETS, INITIAL_ISSUE_TYPES, INITIAL_PRODUCTS } from './initialData';
-import { SaasTenantSelector } from './components/SaaSTenantSelector';
 import { SimonDicompelLogo } from './components/SimonDicompelLogo';
 import { DashboardView } from './components/DashboardView';
 import { TicketList } from './components/TicketList';
@@ -57,59 +56,27 @@ export default function App() {
 
   const DEFAULT_TEST_USER: User = INITIAL_USERS[0];
 
-  // Operation Mode: true = Production (Secure & isolated), false = Homologation (Demo aids visible)
-  const [isProductionMode, setIsProductionMode] = useState<boolean>(() => {
-    const saved = localStorage.getItem('q_is_production_mode');
-    return saved !== null ? saved === 'true' : true; // Default is TRUE for secure production
-  });
-
-  useEffect(() => {
-    localStorage.setItem('q_is_production_mode', String(isProductionMode));
-  }, [isProductionMode]);
-
-  // Run on mount to clear previous mock data of initialData and start from clean State
+  // Limpeza e migração para produção: Mantém exclusivamente o Administrador Dicompel
   React.useEffect(() => {
-    const isWiped = localStorage.getItem('q_test_wiped_v12');
-    if (!isWiped) {
-      localStorage.clear();
-      localStorage.setItem('q_tickets', JSON.stringify([]));
-      localStorage.setItem('q_products', JSON.stringify(INITIAL_PRODUCTS));
-      localStorage.setItem('q_tenants', JSON.stringify(INITIAL_TENANTS));
-      localStorage.setItem('q_users', JSON.stringify(INITIAL_USERS));
-      localStorage.setItem('q_activeTenant', JSON.stringify(INITIAL_TENANTS[0]));
-      localStorage.removeItem('q_currentUser'); // User starts in login
-      localStorage.setItem('q_systemEmailLogs', JSON.stringify([]));
-      localStorage.setItem('q_is_production_mode', 'true'); // Production by default
-      localStorage.setItem('q_test_wiped_v12', 'true');
+    const isProdWiped = localStorage.getItem('q_prod_dicompel_release_v1');
+    if (!isProdWiped) {
+      const prodAdmin: User = {
+        id: 'user_dicompel_admin',
+        name: 'Administrador Dicompel',
+        email: 'admin@dicompel.com.br',
+        role: 'ADMIN',
+        passwordHash: 'Dicompel!@#2026',
+        tenantId: 'tenant_1',
+      };
 
-      // Refresh state
-      setTickets([]);
-      setProducts(INITIAL_PRODUCTS);
-      setTenants(INITIAL_TENANTS);
-      setUsers(INITIAL_USERS);
-      setActiveTenant(INITIAL_TENANTS[0]);
+      localStorage.setItem('q_users', JSON.stringify([prodAdmin]));
+      localStorage.removeItem('q_currentUser'); // Usuário inicia na tela de login
+      localStorage.setItem('q_is_production_mode', 'true');
+      localStorage.setItem('q_prod_dicompel_release_v1', 'true');
+
+      // Atualiza o estado da aplicação
+      setUsers([prodAdmin]);
       setCurrentUser(null);
-      setSystemEmailLogs([]);
-      setSelectedTicketId(null);
-      setActiveMenu('chamados');
-    }
-
-    // Dynamic clean state requested by the user to start simulation with 0 tickets and 0 products
-    const isSimulationWiped = localStorage.getItem('q_test_wiped_simulation_v3');
-    if (!isSimulationWiped) {
-      localStorage.setItem('q_tickets', JSON.stringify([]));
-      localStorage.setItem('q_products', JSON.stringify([]));
-      localStorage.setItem('q_systemEmailLogs', JSON.stringify([]));
-      localStorage.removeItem('q_currentUser'); // Ensure starts on login
-      localStorage.setItem('q_test_wiped_simulation_v3', 'true');
-
-      // Refresh state
-      setTickets([]);
-      setProducts([]);
-      setSystemEmailLogs([]);
-      setCurrentUser(null);
-      setSelectedTicketId(null);
-      setActiveMenu('chamados');
     }
   }, []);
 
@@ -342,11 +309,7 @@ export default function App() {
       setLoginEmail('');
       setLoginPassword('');
     } else {
-      setLoginError(
-        isProductionMode
-          ? 'Email de acesso ou senha incorretos. Por favor, verifique suas credenciais de produção.'
-          : 'Email de acesso ou senha incorretos. Selecione uma conta de teste abaixo para entrar de forma segura.'
-      );
+      setLoginError('Email de acesso ou senha incorretos. Por favor, verifique suas credenciais corporativas.');
     }
   };
 
@@ -769,7 +732,7 @@ export default function App() {
       body: `Prezado(a) gestor de qualidade de Distribuidora Fenix S/A,\n\n` +
         `Este é um email de teste disparado de forma manual para fins de auditoria técnica do gateway SMTP.\n\n` +
         `DETALHES DO TESTE:\n` +
-        `- Ambiente: Homologação SaaS Multi-Tenant\n` +
+        `- Ambiente: Produção Dicompel\n` +
         `- Canal de Notificações: Ativo\n` +
         `- Data do Teste: ${new Date().toLocaleString()}\n\n` +
         `Nenhuma ação por parte do operador é necessária para este registro.\n\n` +
@@ -923,78 +886,16 @@ export default function App() {
               </button>
             </form>
 
-            {/* Operation Mode Selector Toggle */}
-            <div className="flex items-center justify-between border-t border-slate-800/80 pt-5 mt-4">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${isProductionMode ? 'bg-emerald-500 animate-pulse' : 'bg-indigo-500 animate-pulse'}`}></span>
-                Modo de Operação:
-              </span>
-              <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsProductionMode(true)}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer ${
-                    isProductionMode
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                  title="Ocultar credenciais simuladas e usar login real isolado de produção"
-                >
-                  🔒 Produção
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsProductionMode(false)}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer ${
-                    !isProductionMode
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                  title="Exibir atalhos de contas pré-configuradas para demonstração rápida"
-                >
-                  🧪 Homologação
-                </button>
+            {/* Production Environment Notice */}
+            <div className="pt-5 border-t border-slate-800/80 text-center space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-950 border border-slate-800 text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                Ambiente de Produção
               </div>
+              <p className="text-[10px] text-slate-500">
+                Acesso restrito e autenticado. Utilize suas credenciais corporativas cadastradas para acessar o portal.
+              </p>
             </div>
-
-            {/* Quick Access Accounts (Only displayed in Homologation/Demo Mode) */}
-            {!isProductionMode && (
-              <div className="bg-slate-950/40 border border-slate-800/60 p-4.5 rounded-xl space-y-3 animate-fade-in">
-                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                  <Sliders className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Selecione uma conta de teste para preenchimento rápido:</span>
-                </p>
-                
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {INITIAL_USERS.slice(0, 4).map((user) => (
-                    <button
-                      id={`login-quick-${user.id}`}
-                      key={user.id}
-                      onClick={() => {
-                        setLoginEmail(user.email);
-                        setLoginPassword(user.passwordHash || '');
-                      }}
-                      type="button"
-                      className="p-2.5 bg-slate-800 hover:bg-slate-750 text-left rounded-lg text-slate-300 font-medium border border-slate-750 hover:border-slate-650 transition-all flex flex-col cursor-pointer"
-                    >
-                      <span className="font-bold text-white truncate text-xs">{user.name}</span>
-                      <span className="text-[10px] text-slate-400 mt-0.5 truncate uppercase tracking-wider font-semibold flex items-center justify-between w-full">
-                        <span>{user.role}</span>
-                        <span className="text-sky-400 text-[9px] lowercase tracking-normal font-normal">acesso rápido</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {isProductionMode && (
-              <div className="text-center">
-                <p className="text-[10px] text-slate-500 italic">
-                  Ambiente seguro ativo. Use seu email e senha corporativos de locatário cadastrado para acessar o portal.
-                </p>
-              </div>
-            )}
 
           </div>
         </div>
@@ -1005,20 +906,6 @@ export default function App() {
   // CORE APPLICATION LAYOUT
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      
-      {/* 1. SaaS Multi-tenant & Simulating Role Switching Header Banner (Only visible in Homologation/Demo mode) */}
-      {!isProductionMode && (
-        <div className="no-print animate-fade-in">
-          <SaasTenantSelector
-            tenants={tenants}
-            activeTenant={activeTenant}
-            onSelectTenant={handleSelectTenant}
-            users={users}
-            currentUser={currentUser}
-            onSwitchUser={handleSwitchUser}
-          />
-        </div>
-      )}
 
       {/* 2. Main Executive Header */}
       <header className="bg-white border-b border-slate-200 py-3 px-6 shadow-xs flex items-center justify-between no-print gap-4">
@@ -1218,17 +1105,10 @@ export default function App() {
           {/* System info footer */}
           <div className="space-y-2 pt-2 border-t border-slate-900">
             <div className="flex justify-center">
-              <button
-                onClick={() => setIsProductionMode(!isProductionMode)}
-                className={`text-[9px] px-2 py-1 rounded border font-semibold tracking-wider uppercase transition-all cursor-pointer ${
-                  isProductionMode
-                    ? 'border-emerald-800/60 text-emerald-500 bg-emerald-950/20 hover:bg-emerald-950/50'
-                    : 'border-indigo-800/60 text-indigo-400 bg-indigo-950/20 hover:bg-indigo-950/50'
-                }`}
-                title="Clique para alternar o modo de operação do sistema"
-              >
-                {isProductionMode ? '🔒 Modo Produção' : '🧪 Modo Homologação'}
-              </button>
+              <span className="text-[9px] px-2.5 py-1 rounded-full border border-emerald-800/60 text-emerald-400 bg-emerald-950/40 font-semibold tracking-wider uppercase flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                Ambiente de Produção
+              </span>
             </div>
             <p className="text-[9px] text-slate-600 text-center">Version 1.4.0 &bull; 2026</p>
             <p className="text-[9px] text-slate-500 font-medium text-center mt-1">Desenvolvido Coolit Soluções em TI.</p>

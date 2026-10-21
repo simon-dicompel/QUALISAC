@@ -1119,19 +1119,19 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
                           ) : (
                             <button
                               onClick={() => {
-                                if (u.id === 'user_admin') {
+                                if (u.id === 'user_dicompel_admin' || u.email === 'admin@dicompel.com.br') {
                                   alert('O usuário Administrador Principal não pode ser removido para evitar bloqueio permanente de acesso ao sistema.');
                                   return;
                                 }
                                 setDeletingUserId(u.id);
                               }}
-                              disabled={u.id === 'user_admin'}
+                              disabled={u.id === 'user_dicompel_admin' || u.email === 'admin@dicompel.com.br'}
                               className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
-                                u.id === 'user_admin'
+                                u.id === 'user_dicompel_admin' || u.email === 'admin@dicompel.com.br'
                                   ? 'bg-slate-50 text-slate-350 border-slate-100 cursor-not-allowed'
                                   : 'text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 border-slate-200 hover:border-rose-200'
                               }`}
-                              title={u.id === 'user_admin' ? 'Protegido contra exclusão' : 'Excluir Usuário'}
+                              title={u.id === 'user_dicompel_admin' || u.email === 'admin@dicompel.com.br' ? 'Protegido contra exclusão' : 'Excluir Usuário'}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
