@@ -93,7 +93,13 @@ export default function App() {
 
   const [tickets, setTickets] = useState<Ticket[]>(() => {
     const saved = localStorage.getItem('q_tickets');
-    return saved ? JSON.parse(saved) : [];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return INITIAL_TICKETS;
   });
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -841,11 +847,11 @@ export default function App() {
     return (
       <div className="min-h-screen flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-slate-950 text-slate-100">
         <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-          <div className="mx-auto h-16 w-16 bg-blue-600 rounded-2xl flex items-center justify-center font-black text-3xl text-white shadow-xl shadow-blue-500/10">
-            Q
+          <div className="mx-auto mb-4 bg-white p-3.5 rounded-2xl shadow-xl shadow-slate-950/60 border border-slate-800 inline-flex items-center justify-center">
+            <SimonDicompelLogo height={42} />
           </div>
-          <h2 className="mt-6 text-3xl font-black text-white tracking-tight uppercase">QualiSAC</h2>
-          <p className="mt-2 text-xs text-slate-400 font-medium max-w-xs mx-auto">
+          <h2 className="text-2xl font-black text-white tracking-tight uppercase">QualiSAC</h2>
+          <p className="mt-1 text-xs text-slate-400 font-medium max-w-xs mx-auto">
             Portal Integrado de Devoluções e Gestão de Não Conformidades Industriais
           </p>
         </div>
@@ -919,8 +925,8 @@ export default function App() {
       {/* 2. Main Executive Header */}
       <header className="bg-white border-b border-slate-200 py-3 px-6 shadow-xs flex items-center justify-between no-print gap-4">
         <div className="flex items-center gap-4 shrink-0">
-          <div className="bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-150 flex items-center justify-center">
-            <SimonDicompelLogo height={32} />
+          <div className="bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-3xs flex items-center justify-center">
+            <SimonDicompelLogo height={34} />
           </div>
           <div>
             <div className="flex items-center gap-2">

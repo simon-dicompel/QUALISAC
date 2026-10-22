@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Ticket, TicketStatus, User, TicketComment, QualityReport, IssueType, TicketReminder } from '../types';
 import { generateAIQualityReport } from '../utils/gemini';
+import { SimonDicompelLogo } from './SimonDicompelLogo';
 import { 
   ArrowLeft, 
   User as UserIcon, 
@@ -356,10 +357,13 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
           {/* Header Institutional Block */}
           <div className="border-2 border-slate-800 p-4">
             <div className="flex justify-between items-center pb-3 border-b-2 border-slate-800">
-              <div>
-                <h1 className="text-lg font-black tracking-tight text-slate-900 font-sans uppercase">QualiSAC Co.</h1>
-                <p className="text-[9px] text-slate-600 font-mono">SISTEMA DE GESTÃO DA QUALIDADE - SGQ & SAC</p>
-                <p className="text-[9px] text-slate-500 font-mono">CONFORMIDADE REQUISITO ISO 9001:2015 - TRATATIVA DE DESVIOS</p>
+              <div className="flex items-center gap-4">
+                <SimonDicompelLogo height={32} />
+                <div className="border-l border-slate-300 pl-3">
+                  <h1 className="text-base font-black tracking-tight text-slate-900 font-sans uppercase">Simon Dicompel SAC</h1>
+                  <p className="text-[9px] text-slate-600 font-mono">SISTEMA DE GESTÃO DA QUALIDADE - SGQ & SAC</p>
+                  <p className="text-[9px] text-slate-500 font-mono">CONFORMIDADE REQUISITO ISO 9001:2015 - TRATATIVA DE DESVIOS</p>
+                </div>
               </div>
               <div className="text-right border-l border-slate-300 pl-4">
                 <span className="font-mono text-xs font-bold text-slate-900 block">
@@ -712,9 +716,12 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
       {/* -------------------- PRINT VIEWPORT: RETURN SHIPPING LABEL (RÓTULO DE DEVOLUÇÃO) -------------------- */}
       {printType === 'label' && (
         <div className="hidden print:block text-slate-950 bg-white font-sans text-xs p-8 max-w-xl mx-auto border-4 border-double border-slate-800 rounded-lg space-y-6">
-          <div className="text-center pb-3 border-b-2 border-slate-800">
-            <h1 className="text-sm font-black tracking-wider uppercase">RÓTULO DE LOGÍSTICA REVERSA</h1>
-            <p className="text-[9px] text-slate-500 tracking-tight">QualiSAC Co. Setor de Devoluções e Reclamações</p>
+          <div className="flex items-center justify-between pb-3 border-b-2 border-slate-800">
+            <SimonDicompelLogo height={28} />
+            <div className="text-right">
+              <h1 className="text-xs font-black tracking-wider uppercase">RÓTULO DE LOGÍSTICA REVERSA</h1>
+              <p className="text-[9px] text-slate-500 tracking-tight">Simon Dicompel &bull; Setor de Devoluções e Reclamações</p>
+            </div>
           </div>
 
           <div className="flex flex-col items-center justify-center p-4 border border-dashed border-slate-400 bg-slate-50 rounded">

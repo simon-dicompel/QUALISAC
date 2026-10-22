@@ -133,6 +133,10 @@ export interface Ticket {
   returnUF: string; // UF da Devolução (ex: SP, SC, MG, RJ...)
   registeredUf?: string; // compatibilidade
 
+  // Contatos e Notificações (E-mails e Observadores)
+  clientEmail?: string; // E-mail do cliente ou consumidor solicitante
+  observers?: string[]; // E-mails dos observadores em cópia que acompanham e interagem no chamado
+
   // Controle de Ciclo de Vida do Chamado
   status: TicketStatus;
   createdAt: string;
@@ -157,10 +161,12 @@ export interface SystemEmailLog {
   sender: string;
   recipientName: string;
   recipientEmail: string;
-  status: 'Resolvido' | 'Finalizado';
+  ccEmails?: string[]; // Observadores em cópia
+  actionType: 'abertura' | 'atualizacao_status' | 'laudo_qualidade' | 'interacao_comentario' | 'atualizacao_geral';
+  status?: string; // Status associado (Aberto, Em analise, Em tratativa, Resolvido, Finalizado)
   subject: string;
   body: string;
-  serviceType: string; // e.g., "SMS / Email SMTP Broker (Simulado)"
+  serviceType: string; // e.g., "SMTP Broker / Notificação Automatizada Simon Dicompel"
 }
 
 export interface Product {

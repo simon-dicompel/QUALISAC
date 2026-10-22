@@ -85,7 +85,7 @@ export const INITIAL_TENANTS: Tenant[] = [
     plan: 'Enterprise',
     status: 'Ativo',
     createdAt: '2025-01-15T10:00:00Z',
-    color: '#0284c7', // sky-600
+    color: '#003355', // Simon Dicompel Blue
   },
   {
     id: 'tenant_2',
@@ -154,6 +154,8 @@ export const INITIAL_TICKETS: Ticket[] = [
     pacReversoCode: 'PI849201948BR',
     returnUF: 'SP',
     registeredUf: 'SP',
+    clientEmail: 'carlos.mendes@eletricasul.com.br',
+    observers: ['qualidade@dicompel.com.br', 'engenharia.simon20@dicompel.com.br'],
     status: 'Finalizado',
     createdAt: '2026-05-15T09:30:00Z',
     updatedAt: '2026-05-18T16:00:00Z',

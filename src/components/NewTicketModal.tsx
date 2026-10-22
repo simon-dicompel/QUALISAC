@@ -16,7 +16,10 @@ import {
   Layers,
   MapPin,
   DollarSign,
-  CheckCircle2
+  CheckCircle2,
+  Mail,
+  Users,
+  Bell
 } from 'lucide-react';
 
 const PRODUCT_LINES = [
@@ -46,6 +49,8 @@ interface NewTicketModalProps {
     resellerName?: string;
     firstContactDate: string;
     clientName: string;
+    clientEmail?: string;
+    observers?: string[];
     productCode: string;
     productName: string;
     productLine: string;
@@ -82,10 +87,32 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
 }) => {
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // 1. Informações do Cliente
+  // 1. Informações do Cliente & Notificações
   const [resellerName, setResellerName] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [clientEmail, setClientEmail] = useState('');
   const [firstContactDate, setFirstContactDate] = useState(todayStr);
+
+  // Observadores do Chamado (recebem e-mails automáticos e interagem)
+  const [observers, setObservers] = useState<string[]>(['qualidade@dicompel.com.br']);
+  const [observerInput, setObserverInput] = useState('');
+
+  const handleAddObserver = (emailToAdd?: string) => {
+    const raw = (emailToAdd || observerInput).trim().toLowerCase();
+    if (!raw) return;
+    if (!raw.includes('@') || !raw.includes('.')) {
+      alert('Por favor, informe um e-mail válido (ex: nome@empresa.com.br).');
+      return;
+    }
+    if (!observers.includes(raw)) {
+      setObservers((prev) => [...prev, raw]);
+    }
+    setObserverInput('');
+  };
+
+  const handleRemoveObserver = (emailToRemove: string) => {
+    setObservers((prev) => prev.filter((o) => o !== emailToRemove));
+  };
 
   // 2. Produto Devolvido Atual
   const [productCode, setProductCode] = useState(products[0]?.code || '');
@@ -281,8 +308,10 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
     }));
 
     onSubmit({
-      // 1. Cliente
+      // 1. Cliente & Notificações
       customerName: customerName.trim(),
+      clientEmail: clientEmail.trim() || undefined,
+      observers: observers.length > 0 ? observers : undefined,
       resellerName: resellerName.trim() || undefined,
       firstContactDate: firstContactDate || todayStr,
       clientName: customerName.trim(), // compatibilidade
@@ -427,6 +456,123 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                   onChange={(e) => setFirstContactDate(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
                 />
+              </div>
+
+              {/* E-mail do Cliente / Contato */}
+              <div className="md:col-span-4">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-700 uppercase flex items-center gap-1">
+                    <Mail className="w-3.5 h-3.5 text-blue-600" />
+                    <span>E-mail do Cliente / Contato</span>
+                  </label>
+                  <span className="text-[9.5px] text-slate-400 font-medium bg-slate-200/60 px-1.5 py-0.2 rounded">
+                    Receberá avisos
+                  </span>
+                </div>
+                <input
+                  id="modal-client-email-input"
+                  type="email"
+                  placeholder="ex: cliente@construtora.com.br"
+                  value={clientEmail}
+                  onChange={(e) => setClientEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                />
+              </div>
+
+              {/* Observadores do Chamado (Cópia para Acompanhamento & Interação) */}
+              <div className="md:col-span-8 bg-blue-50/50 p-3 rounded-xl border border-blue-150 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-black text-slate-800 uppercase flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Observadores do Chamado (Notificações e Interação)</span>
+                  </label>
+                  <span className="text-[9.5px] text-blue-800 font-bold bg-white px-2 py-0.5 rounded border border-blue-200">
+                    {observers.length} observador(es) em cópia
+                  </span>
+                </div>
+
+                <p className="text-[10px] text-slate-500 leading-tight">
+                  Pessoas que receberão e-mails automáticos na abertura e em cada atualização do pedido para interagir e acompanhar.
+                </p>
+
+                {/* Input de novo observador */}
+                <div className="flex gap-2">
+                  <input
+                    id="modal-observer-email-input"
+                    type="email"
+                    placeholder="Digite o e-mail do observador (ex: engenharia@dicompel.com.br)..."
+                    value={observerInput}
+                    onChange={(e) => setObserverInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddObserver();
+                      }
+                    }}
+                    className="flex-1 px-3 py-1.5 border border-slate-250 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddObserver()}
+                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                    title="Adicionar à lista de observadores"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Adicionar</span>
+                  </button>
+                </div>
+
+                {/* Chips de observadores selecionados */}
+                <div className="flex flex-wrap gap-1.5 min-h-6 pt-0.5">
+                  {observers.map((obs) => (
+                    <span
+                      key={obs}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white text-blue-950 border border-blue-200 text-[11px] font-semibold shadow-3xs"
+                    >
+                      <Mail className="w-3 h-3 text-blue-600" />
+                      <span>{obs}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveObserver(obs)}
+                        className="text-slate-400 hover:text-rose-600 font-black ml-1 cursor-pointer"
+                        title="Remover observador"
+                      >
+                        &times;
+                      </button>
+                    </span>
+                  ))}
+                </div>
+
+                {/* Atalhos rápidos Simon Dicompel */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-blue-100 text-[10px]">
+                  <span className="text-slate-500 font-semibold flex items-center gap-1">
+                    <Bell className="w-3 h-3 text-blue-500" />
+                    Atalhos Simon Dicompel:
+                  </span>
+                  {[
+                    'qualidade@dicompel.com.br',
+                    'engenharia@dicompel.com.br',
+                    'sac@dicompel.com.br',
+                    'expedicao@dicompel.com.br'
+                  ].map((shortcut) => {
+                    const isAdded = observers.includes(shortcut);
+                    return (
+                      <button
+                        key={shortcut}
+                        type="button"
+                        disabled={isAdded}
+                        onClick={() => handleAddObserver(shortcut)}
+                        className={`px-2 py-0.5 rounded border transition-all cursor-pointer font-medium ${
+                          isAdded
+                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-default'
+                            : 'bg-white hover:bg-blue-100 text-blue-900 border-blue-200 hover:border-blue-400'
+                        }`}
+                      >
+                        + {shortcut.split('@')[0]}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
