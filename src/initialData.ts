@@ -385,5 +385,162 @@ export const INITIAL_TICKETS: Ticket[] = [
         timestamp: '2026-05-22T10:00:00Z',
       }
     ]
+  },
+  {
+    id: 'DEV-0001',
+    tenantId: 'tenant_1',
+    ticketType: 'DEVOLUÇÃO',
+    customerName: 'Rede Elétrica Central',
+    clientName: 'Rede Elétrica Central',
+    resellerName: 'Elétrica Brasil Atacado',
+    reseller: 'Elétrica Brasil Atacado',
+    consumer: 'Rede Elétrica Central',
+    firstContactDate: '2026-05-23',
+    productCode: 'SIM-20202',
+    productName: 'Tomada 2P+T 20A Simon 20 Vermelha',
+    productLine: 'Simon 20',
+    batch: 'L-240901D',
+    issueType: 'Troca',
+    subCategory: 'Item divergente da Nota Fiscal',
+    quantity: 80,
+    invoiceNumber: 'NF-110293',
+    notes: 'Devolução física de estoque por divergência de especificação faturada.',
+    description: 'Solicitação de devolução de mercadoria com autorização de postagem PAC Reverso. 80 módulos de tomada enviados com amperagem incorreta.',
+    freightCost: 65.00,
+    shippingValue: 65.00,
+    pacReversoRequested: 'Sim',
+    requestedReversePac: 'Sim',
+    pacReversoCode: 'PI392019482BR',
+    returnUF: 'PR',
+    registeredUf: 'PR',
+    clientEmail: 'compras@eletricacentral.com.br',
+    observerEmail: 'logistica.devolucoes@dicompel.com.br',
+    observers: ['qualidade@dicompel.com.br', 'logistica.devolucoes@dicompel.com.br'],
+    status: 'Em analise',
+    createdAt: '2026-05-23T11:15:00Z',
+    updatedAt: '2026-05-23T11:15:00Z',
+    userId: 'user_dicompel_admin',
+    userName: 'Administrador Dicompel',
+    files: [],
+    comments: [],
+    defects: [
+      { id: 'def_d_1', description: 'Item faturado 20A em vez de 10A', quantity: 80, category: 'Desistência / Troca Comercial', subcategory: 'Item divergente da Nota Fiscal' }
+    ],
+    items: [
+      {
+        id: 'item_d_1',
+        productCode: 'SIM-20202',
+        productName: 'Tomada 2P+T 20A Simon 20 Vermelha',
+        productLine: 'Simon 20',
+        quantity: 80,
+        defectCategory: 'Desistência / Troca Comercial',
+        defectSubcategory: 'Item divergente da Nota Fiscal',
+        notes: 'Devolução de mercadoria física',
+        invoiceNumber: 'NF-110293'
+      }
+    ],
+    history: [
+      {
+        id: 'h_dev_1',
+        ticketId: 'DEV-0001',
+        action: 'Abertura de Chamado [DEVOLUÇÃO]',
+        userId: 'user_dicompel_admin',
+        userName: 'Administrador Dicompel',
+        userRole: 'ADMIN',
+        details: 'Abertura de chamado de Devolução física com PAC Reverso gerado.',
+        timestamp: '2026-05-23T11:15:00Z'
+      }
+    ]
+  },
+  {
+    id: 'NCO-0001',
+    tenantId: 'tenant_1',
+    ticketType: 'NÃO CONFORMIDADE',
+    customerName: 'Engenharia & Obras Paulistas',
+    clientName: 'Engenharia & Obras Paulistas',
+    resellerName: 'Distribuidora Iluminação SP',
+    reseller: 'Distribuidora Iluminação SP',
+    consumer: 'Engenharia & Obras Paulistas',
+    firstContactDate: '2026-05-24',
+    productCode: 'SIM-24010',
+    productName: 'Módulo Dimmer Rotativo Simon 24 Branco',
+    productLine: 'Simon 24',
+    batch: 'L-240510X',
+    issueType: 'Defeito Elétrico',
+    subCategory: 'Superaquecimento sob carga',
+    quantity: 30,
+    invoiceNumber: 'NF-114820',
+    notes: 'Aquecimento excessivo dos dimmers em lâmpadas LED dimerizáveis.',
+    description: 'Não conformidade técnica crítica reportada pela fiscalização da obra. Dimmers apresentam aquecimento fora da tolerância da norma NBR NM 60669.',
+    freightCost: 42.00,
+    shippingValue: 42.00,
+    pacReversoRequested: 'Sim',
+    requestedReversePac: 'Sim',
+    pacReversoCode: 'PI551209384BR',
+    returnUF: 'SP',
+    registeredUf: 'SP',
+    clientEmail: 'eng.fiscal@obraspaulistas.com.br',
+    observerEmail: 'auditoria.iso9001@dicompel.com.br',
+    observers: ['qualidade@dicompel.com.br', 'auditoria.iso9001@dicompel.com.br', 'engenharia.produto@dicompel.com.br'],
+    status: 'Em tratativa',
+    createdAt: '2026-05-24T08:45:00Z',
+    updatedAt: '2026-05-24T14:20:00Z',
+    userId: 'user_dicompel_admin',
+    userName: 'Administrador Dicompel',
+    files: [],
+    comments: [],
+    qualityReport: {
+      rootCause: 'Dissipador de alumínio subdimensionado para a corrente nominal de pico de 300W em ambiente embutido.',
+      fiveWhys: [
+        'Por que o dimmer aqueceu acima de 65°C? Porque a taxa de troca térmica no módulo 4x2 ficou restrita.',
+        'Por que a troca térmica foi insuficiente? Porque o dissipador térmico foi reduzido em 15% na revisão C.',
+        'Por que o dissipador foi reduzido? Para permitir montagem com fios de 4mm² na mesma caixa.',
+        'Por que não foi feito teste de elevação de temperatura? O ensaio foi realizado apenas com carga puramente resistiva e não com drivers LED.',
+        'Por que o procedimento falhou? O protocolo de homologação ISO não incluía carga eletrônica não-linear.'
+      ],
+      correctiveAction: 'Revisão imediata do dissipador térmico para versão com aletas estendidas e recall técnico do lote.',
+      preventiveAction: 'Inclusão de ensaio de carga harmônica LED no procedimento padrão de homologação de dimmers (PQ-DIM-004).',
+      responsible: 'Comitê de Não Conformidade e Qualidade',
+      targetDate: '2026-06-15',
+      updatedAt: '2026-05-24T14:20:00Z'
+    },
+    defects: [
+      { id: 'def_nco_1', description: 'Elevação térmica acima da norma NBR NM 60669', quantity: 30, category: 'Defeito Elétrico', subcategory: 'Superaquecimento sob carga' }
+    ],
+    items: [
+      {
+        id: 'item_nco_1',
+        productCode: 'SIM-24010',
+        productName: 'Módulo Dimmer Rotativo Simon 24 Branco',
+        productLine: 'Simon 24',
+        quantity: 30,
+        defectCategory: 'Defeito Elétrico',
+        defectSubcategory: 'Superaquecimento sob carga',
+        notes: 'Laudo técnico de não conformidade emitido',
+        invoiceNumber: 'NF-114820'
+      }
+    ],
+    history: [
+      {
+        id: 'h_nco_1',
+        ticketId: 'NCO-0001',
+        action: 'Abertura de Chamado [NÃO CONFORMIDADE]',
+        userId: 'user_dicompel_admin',
+        userName: 'Administrador Dicompel',
+        userRole: 'ADMIN',
+        details: 'Abertura de Não Conformidade técnica fabril ISO 9001.',
+        timestamp: '2026-05-24T08:45:00Z'
+      },
+      {
+        id: 'h_nco_2',
+        ticketId: 'NCO-0001',
+        action: 'Parecer Técnico Salvo (Status: Em tratativa)',
+        userId: 'user_dicompel_admin',
+        userName: 'Administrador Dicompel',
+        userRole: 'ADMIN',
+        details: 'Análise de Causa Raiz pelos 5 Porquês e Plano de Ação CAPA cadastrados.',
+        timestamp: '2026-05-24T14:20:00Z'
+      }
+    ]
   }
 ];

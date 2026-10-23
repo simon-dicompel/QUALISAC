@@ -22,6 +22,7 @@ interface TicketListProps {
   tickets: Ticket[];
   onSelectTicket: (ticketId: string) => void;
   onOpenNewTicketModal: () => void;
+  onOpenNewTicketModalWithType?: (type: 'SAC' | 'DEVOLUÇÃO' | 'NÃO CONFORMIDADE') => void;
   onOpenNewSpecialTicketModal?: () => void;
   canCreateTicket: boolean;
   globalSearchTerm?: string;
@@ -34,6 +35,7 @@ export const TicketList: React.FC<TicketListProps> = ({
   tickets,
   onSelectTicket,
   onOpenNewTicketModal,
+  onOpenNewTicketModalWithType,
   onOpenNewSpecialTicketModal,
   canCreateTicket,
   globalSearchTerm = '',
@@ -44,6 +46,7 @@ export const TicketList: React.FC<TicketListProps> = ({
   // Filters State
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>(selectedStatusFilter);
+  const [ticketKindFilter, setTicketKindFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
@@ -93,6 +96,13 @@ export const TicketList: React.FC<TicketListProps> = ({
     const matchesStatus = statusFilter === 'all' || ticket.status === statusFilter;
     const matchesType = typeFilter === 'all' || ticket.issueType === typeFilter;
 
+    // Filter by Ticket Type Prefix (SAC / DEVOLUÇÃO / NÃO CONFORMIDADE)
+    const matchesTicketKind =
+      ticketKindFilter === 'all' ||
+      (ticketKindFilter === 'SAC' && (ticket.ticketType === 'SAC' || ticket.id.startsWith('SAC-'))) ||
+      (ticketKindFilter === 'DEV' && (ticket.ticketType === 'DEVOLUÇÃO' || ticket.id.startsWith('DEV-'))) ||
+      (ticketKindFilter === 'NCO' && (ticket.ticketType === 'NÃO CONFORMIDADE' || ticket.id.startsWith('NCO-')));
+
     // Open date filtering check
     let matchesDateRange = true;
     if (startDate || endDate) {
@@ -107,7 +117,7 @@ export const TicketList: React.FC<TicketListProps> = ({
       }
     }
 
-    return matchesLocalSearch && matchesGlobalSearch && matchesStatus && matchesType && matchesDateRange;
+    return matchesLocalSearch && matchesGlobalSearch && matchesStatus && matchesType && matchesTicketKind && matchesDateRange;
   });
 
   // Export to CSV simulation
@@ -213,17 +223,37 @@ export const TicketList: React.FC<TicketListProps> = ({
         {/* Action Button Controls */}
         <div className="flex flex-wrap items-center gap-2">
           {canCreateTicket && (
-            <>
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
               <button
-                id="new-ticket-btn"
-                onClick={onOpenNewTicketModal}
-                className="inline-flex items-center gap-1.5 px-4.5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all shadow-sm shadow-blue-500/20 cursor-pointer"
-                title="Abrir novo chamado de SAC para devolução de produtos Simon Dicompel"
+                id="new-ticket-sac-btn"
+                onClick={() => onOpenNewTicketModalWithType ? onOpenNewTicketModalWithType('SAC') : onOpenNewTicketModal()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-black bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all shadow-xs cursor-pointer"
+                title="Abrir chamado de atendimento ao cliente SAC (prefixo SAC-0001)"
               >
-                <Plus className="w-4 h-4" />
-                <span>Novo Chamado (SAC)</span>
+                <Plus className="w-3.5 h-3.5" />
+                <span>SAC</span>
               </button>
-            </>
+
+              <button
+                id="new-ticket-dev-btn"
+                onClick={() => onOpenNewTicketModalWithType ? onOpenNewTicketModalWithType('DEVOLUÇÃO') : onOpenNewTicketModal()}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-white hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800 rounded-lg border border-emerald-250 hover:border-emerald-350 transition-all cursor-pointer shadow-2xs"
+                title="Abrir chamado de Devolução física de materiais com PAC Reverso (prefixo DEV-0001)"
+              >
+                <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Devolução</span>
+              </button>
+
+              <button
+                id="new-ticket-nco-btn"
+                onClick={() => onOpenNewTicketModalWithType ? onOpenNewTicketModalWithType('NÃO CONFORMIDADE') : onOpenNewTicketModal()}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-white hover:bg-amber-50 text-amber-800 hover:text-amber-900 rounded-lg border border-amber-250 hover:border-amber-350 transition-all cursor-pointer shadow-2xs"
+                title="Abrir chamado de Não Conformidade técnica e auditoria ISO 9001 (prefixo NCO-0001)"
+              >
+                <Plus className="w-3.5 h-3.5 text-amber-600" />
+                <span>Não Conf.</span>
+              </button>
+            </div>
           )}
 
           <button
@@ -267,7 +297,7 @@ export const TicketList: React.FC<TicketListProps> = ({
           </div>
 
           {/* Status Dropdown */}
-          <div className="w-full md:w-48">
+          <div className="w-full md:w-44">
             <select
               id="status-filter-select"
               value={statusFilter}
@@ -287,8 +317,24 @@ export const TicketList: React.FC<TicketListProps> = ({
             </select>
           </div>
 
-          {/* Type Dropdown */}
+          {/* Ticket Kind (SAC / DEV / NCO) Dropdown */}
           <div className="w-full md:w-52">
+            <select
+              id="kind-filter-select"
+              value={ticketKindFilter}
+              onChange={(e) => setTicketKindFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-250 rounded-lg text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+              title="Filtrar por classificação: SAC, Devolução ou Não Conformidade"
+            >
+              <option value="all">📑 Tipo: Todos (SAC/DEV/NCO)</option>
+              <option value="SAC">🎧 SAC (SAC-xxxx)</option>
+              <option value="DEV">🔄 Devolução (DEV-xxxx)</option>
+              <option value="NCO">⚠️ Não Conformidade (NCO-xxxx)</option>
+            </select>
+          </div>
+
+          {/* Type Dropdown */}
+          <div className="w-full md:w-48">
             <select
               id="type-filter-select"
               value={typeFilter}
@@ -389,7 +435,22 @@ export const TicketList: React.FC<TicketListProps> = ({
                   className={`table-row border-b border-slate-100 transition-colors cursor-pointer text-sm ${getIssueColorLeftBorder(ticket.issueType)}`}
                 >
                   <td className="px-6 py-4 font-mono font-bold text-slate-900 group-hover:text-blue-600">
-                    <div>{ticket.id}</div>
+                    <div className="flex items-center gap-1.5">
+                      {ticket.id.startsWith('DEV-') || ticket.ticketType === 'DEVOLUÇÃO' ? (
+                        <span className="px-1.5 py-0.5 rounded text-[9.5px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          DEV
+                        </span>
+                      ) : ticket.id.startsWith('NCO-') || ticket.ticketType === 'NÃO CONFORMIDADE' ? (
+                        <span className="px-1.5 py-0.5 rounded text-[9.5px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300">
+                          NCO
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded text-[9.5px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-300">
+                          SAC
+                        </span>
+                      )}
+                      <span className="text-sm font-extrabold text-slate-900">{ticket.id}</span>
+                    </div>
                     {ticket.invoiceNumber && (
                       <div className="text-[10px] text-slate-400 font-normal mt-0.5" title="Número da Nota Fiscal">
                         NF: {ticket.invoiceNumber}

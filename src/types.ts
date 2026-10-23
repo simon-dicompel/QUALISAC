@@ -135,7 +135,11 @@ export interface Ticket {
 
   // Contatos e Notificações (E-mails e Observadores)
   clientEmail?: string; // E-mail do cliente ou consumidor solicitante
+  observerEmail?: string; // E-mail para Notificações Adicionais
   observers?: string[]; // E-mails dos observadores em cópia que acompanham e interagem no chamado
+
+  // Tipo de Chamado para Prefixo (SAC, DEV, NCO)
+  ticketType?: 'SAC' | 'DEVOLUÇÃO' | 'NÃO CONFORMIDADE';
 
   // Controle de Ciclo de Vida do Chamado
   status: TicketStatus;
@@ -167,6 +171,9 @@ export interface SystemEmailLog {
   subject: string;
   body: string;
   serviceType: string; // e.g., "SMTP Broker / Notificação Automatizada Simon Dicompel"
+  deliveryStatus?: 'sent' | 'pending_smtp' | 'failed';
+  errorMessage?: string;
+  messageId?: string;
 }
 
 export interface Product {

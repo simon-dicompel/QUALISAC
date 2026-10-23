@@ -45,11 +45,13 @@ interface NewTicketModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: {
+    ticketType: 'SAC' | 'DEVOLUÇÃO' | 'NÃO CONFORMIDADE';
     customerName: string;
     resellerName?: string;
     firstContactDate: string;
     clientName: string;
     clientEmail?: string;
+    observerEmail?: string;
     observers?: string[];
     productCode: string;
     productName: string;
@@ -76,6 +78,8 @@ interface NewTicketModalProps {
   products: Product[];
   issueTypes: IssueTypeCategory[];
   isSpecial?: boolean;
+  existingTickets?: { id: string }[];
+  initialTicketType?: 'SAC' | 'DEVOLUÇÃO' | 'NÃO CONFORMIDADE';
 }
 
 export const NewTicketModal: React.FC<NewTicketModalProps> = ({
@@ -84,8 +88,13 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   onSubmit,
   products,
   issueTypes,
+  existingTickets = [],
+  initialTicketType = 'SAC',
 }) => {
   const todayStr = new Date().toISOString().split('T')[0];
+
+  // 0. Tipo de Chamado (SAC, DEVOLUÇÃO, NÃO CONFORMIDADE) com Prefixo dinâmico
+  const [ticketType, setTicketType] = useState<'SAC' | 'DEVOLUÇÃO' | 'NÃO CONFORMIDADE'>(initialTicketType);
 
   // 1. Informações do Cliente & Notificações
   const [resellerName, setResellerName] = useState('');
@@ -93,7 +102,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   const [clientEmail, setClientEmail] = useState('');
   const [firstContactDate, setFirstContactDate] = useState(todayStr);
 
-  // Observadores do Chamado (recebem e-mails automáticos e interagem)
+  // E-mail para Notificações Adicionais e Observadores
+  const [additionalObserverEmail, setAdditionalObserverEmail] = useState('');
   const [observers, setObservers] = useState<string[]>(['qualidade@dicompel.com.br']);
   const [observerInput, setObserverInput] = useState('');
 
@@ -143,8 +153,11 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   // Sincronização inicial ao abrir
   useEffect(() => {
     if (isOpen) {
+      setTicketType(initialTicketType || 'SAC');
       setResellerName('');
       setCustomerName('');
+      setClientEmail('');
+      setAdditionalObserverEmail('');
       setFirstContactDate(new Date().toISOString().split('T')[0]);
 
       const firstProd = products[0];
@@ -169,6 +182,16 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
       setReturnUF('SP');
     }
   }, [isOpen, products, issueTypes]);
+
+  // Cálculo de prévia do ID formatado de acordo com a opção selecionada (SAC-xxxx, DEV-xxxx, NCO-xxxx)
+  const currentPrefix = ticketType === 'DEVOLUÇÃO' ? 'DEV' : ticketType === 'NÃO CONFORMIDADE' ? 'NCO' : 'SAC';
+  const matchingTickets = existingTickets.filter((t) => t.id.startsWith(`${currentPrefix}-`));
+  let calculatedSeq = matchingTickets.length + 1;
+  let previewId = `${currentPrefix}-${String(calculatedSeq).padStart(4, '0')}`;
+  while (existingTickets.some((t) => t.id === previewId)) {
+    calculatedSeq++;
+    previewId = `${currentPrefix}-${String(calculatedSeq).padStart(4, '0')}`;
+  }
 
   if (!isOpen) return null;
 
@@ -307,11 +330,21 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
       subcategory: item.defectSubcategory,
     }));
 
+    const finalObservers = [...observers];
+    if (additionalObserverEmail.trim()) {
+      const trimmed = additionalObserverEmail.trim().toLowerCase();
+      if (!finalObservers.includes(trimmed)) {
+        finalObservers.push(trimmed);
+      }
+    }
+
     onSubmit({
+      ticketType,
       // 1. Cliente & Notificações
       customerName: customerName.trim(),
       clientEmail: clientEmail.trim() || undefined,
-      observers: observers.length > 0 ? observers : undefined,
+      observerEmail: additionalObserverEmail.trim() || (finalObservers.length > 0 ? finalObservers[0] : undefined),
+      observers: finalObservers.length > 0 ? finalObservers : undefined,
       resellerName: resellerName.trim() || undefined,
       firstContactDate: firstContactDate || todayStr,
       clientName: customerName.trim(), // compatibilidade
@@ -385,6 +418,92 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
         {/* Modal Form */}
         <form onSubmit={handleSubmitForm} className="p-6 space-y-6 max-h-[82vh] overflow-y-auto text-slate-700">
           
+          {/* ========================================================
+              SELEÇÃO DO TIPO DE CHAMADO (SAC | DEVOLUÇÃO | NÃO CONFORMIDADE)
+             ======================================================== */}
+          <div className="bg-slate-900 rounded-2xl p-4.5 text-white shadow-lg border border-slate-750 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-750">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-pulse"></span>
+                <span className="text-xs font-black uppercase tracking-wider text-slate-200">
+                  Selecione o Tipo de Chamado
+                </span>
+              </div>
+              <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1 rounded-lg border border-slate-700">
+                <span className="text-[11px] text-slate-300 font-medium">Código a Gerar:</span>
+                <span className="font-mono text-xs font-black text-blue-300 bg-blue-950 px-2 py-0.5 rounded border border-blue-500/40">
+                  {previewId}
+                </span>
+              </div>
+            </div>
+
+            {/* Os 3 botões requeridos pelo usuário */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <button
+                type="button"
+                id="btn-type-sac"
+                onClick={() => setTicketType('SAC')}
+                className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                  ticketType === 'SAC'
+                    ? 'bg-blue-600 border-blue-400 text-white shadow-md shadow-blue-500/30 scale-[1.01]'
+                    : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-xs sm:text-sm tracking-wide">SAC</span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-black/30 font-bold border border-white/20">
+                    SAC-0001...
+                  </span>
+                </div>
+                <span className="text-[10.5px] mt-2 opacity-85 leading-tight">
+                  Atendimento e suporte ao cliente, dúvidas gerais e solicitações comerciais.
+                </span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-type-devolucao"
+                onClick={() => setTicketType('DEVOLUÇÃO')}
+                className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                  ticketType === 'DEVOLUÇÃO'
+                    ? 'bg-emerald-600 border-emerald-400 text-white shadow-md shadow-emerald-500/30 scale-[1.01]'
+                    : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-xs sm:text-sm tracking-wide">DEVOLUÇÃO</span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-black/30 font-bold border border-white/20">
+                    DEV-0001...
+                  </span>
+                </div>
+                <span className="text-[10.5px] mt-2 opacity-85 leading-tight">
+                  Recebimento físico de materiais, frete/PAC Reverso e reposição de estoque.
+                </span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-type-nao-conformidade"
+                onClick={() => setTicketType('NÃO CONFORMIDADE')}
+                className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                  ticketType === 'NÃO CONFORMIDADE'
+                    ? 'bg-amber-600 border-amber-400 text-white shadow-md shadow-amber-500/30 scale-[1.01]'
+                    : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-xs sm:text-sm tracking-wide">NÃO CONFORMIDADE</span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-black/30 font-bold border border-white/20">
+                    NCO-0001...
+                  </span>
+                </div>
+                <span className="text-[10.5px] mt-2 opacity-85 leading-tight">
+                  Desvios técnicos, defeito de fabricação, laudo de qualidade e auditoria ISO 9001.
+                </span>
+              </button>
+            </div>
+          </div>
+
           {/* ========================================================
               SEÇÃO 1: INFORMAÇÕES DO CLIENTE
              ======================================================== */}
@@ -479,28 +598,50 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                 />
               </div>
 
-              {/* Observadores do Chamado (Cópia para Acompanhamento & Interação) */}
-              <div className="md:col-span-8 bg-blue-50/50 p-3 rounded-xl border border-blue-150 space-y-2">
-                <div className="flex items-center justify-between">
+              {/* E-mail para Notificações Adicionais */}
+              <div className="md:col-span-4">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-800 uppercase flex items-center gap-1">
+                    <Mail className="w-3.5 h-3.5 text-blue-600" />
+                    <span>E-mail para Notificações Adicionais</span>
+                  </label>
+                  <span className="text-[9.5px] text-blue-700 font-bold bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+                    Observador
+                  </span>
+                </div>
+                <input
+                  id="modal-additional-notifications-email"
+                  type="email"
+                  placeholder="ex: observador@empresa.com.br"
+                  value={additionalObserverEmail}
+                  onChange={(e) => setAdditionalObserverEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                  title="E-mail que receberá cópia de todas as atualizações e mudanças de status deste chamado"
+                />
+              </div>
+
+              {/* Observadores e E-mails em Cópia (Acompanhamento & Interação) */}
+              <div className="md:col-span-12 bg-blue-50/60 p-3.5 rounded-xl border border-blue-200/80 space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                   <label className="text-[11px] font-black text-slate-800 uppercase flex items-center gap-1.5">
                     <Users className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Observadores do Chamado (Notificações e Interação)</span>
+                    <span>Observadores do Chamado (Recebem E-mails Automáticos em cada Atualização)</span>
                   </label>
-                  <span className="text-[9.5px] text-blue-800 font-bold bg-white px-2 py-0.5 rounded border border-blue-200">
-                    {observers.length} observador(es) em cópia
+                  <span className="text-[10px] text-blue-900 font-bold bg-white px-2 py-0.5 rounded-full border border-blue-200 shadow-2xs self-start sm:self-auto">
+                    {observers.length + (additionalObserverEmail.trim() ? 1 : 0)} destinatário(s) em cópia
                   </span>
                 </div>
 
-                <p className="text-[10px] text-slate-500 leading-tight">
-                  Pessoas que receberão e-mails automáticos na abertura e em cada atualização do pedido para interagir e acompanhar.
+                <p className="text-[10.5px] text-slate-600 leading-snug">
+                  Todas as pessoas cadastradas como observadores receberão e-mails automatizados na abertura e em cada mudança de status ou interação do pedido.
                 </p>
 
-                {/* Input de novo observador */}
+                {/* Input de inclusão de mais observadores */}
                 <div className="flex gap-2">
                   <input
                     id="modal-observer-email-input"
                     type="email"
-                    placeholder="Digite o e-mail do observador (ex: engenharia@dicompel.com.br)..."
+                    placeholder="Incluir outro e-mail de observador (ex: gerencia@dicompel.com.br)..."
                     value={observerInput}
                     onChange={(e) => setObserverInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -514,7 +655,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                   <button
                     type="button"
                     onClick={() => handleAddObserver()}
-                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-all cursor-pointer flex items-center gap-1 shrink-0 shadow-xs"
                     title="Adicionar à lista de observadores"
                   >
                     <Plus className="w-3.5 h-3.5" />

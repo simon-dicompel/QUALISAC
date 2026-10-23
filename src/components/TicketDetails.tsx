@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Ticket, TicketStatus, User, TicketComment, QualityReport, IssueType, TicketReminder } from '../types';
+import { Ticket, TicketStatus, User, TicketComment, QualityReport, IssueType, TicketReminder, SystemEmailLog } from '../types';
 import { generateAIQualityReport } from '../utils/gemini';
 import { SimonDicompelLogo } from './SimonDicompelLogo';
 import { 
@@ -21,7 +21,16 @@ import {
   Download,
   ListTodo,
   Check,
-  X
+  X,
+  Mail,
+  Send,
+  Users,
+  CheckCircle2,
+  Zap,
+  Clock,
+  ExternalLink,
+  Server,
+  AlertTriangle
 } from 'lucide-react';
 
 interface TicketDetailsProps {
@@ -35,6 +44,10 @@ interface TicketDetailsProps {
   onAddFile: (ticketId: string, name: string, size: string, type: string, url: string) => void;
   onDeleteTicket: (ticketId: string) => void;
   onUpdateReminders: (ticketId: string, reminders: TicketReminder[]) => void;
+  systemEmailLogs?: SystemEmailLog[];
+  onUpdateObservers?: (ticketId: string, observers: string[], observerEmail?: string) => void;
+  onSendManualNotification?: (ticket: Ticket, subject: string, message: string) => void;
+  onOpenSmtpConfig?: () => void;
 }
 
 export const TicketDetails: React.FC<TicketDetailsProps> = ({
@@ -48,10 +61,20 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
   onAddFile,
   onDeleteTicket,
   onUpdateReminders,
+  systemEmailLogs = [],
+  onUpdateObservers,
+  onSendManualNotification,
+  onOpenSmtpConfig,
 }) => {
-  // Tabs for the right panel: "Analise de Qualidade" vs "Comentarios e Auditoria"
-  const [activeTab, setActiveTab] = useState<'qualidade' | 'interacoes'>('qualidade');
+  // Tabs for the right panel: "Analise de Qualidade", "Comentarios e Auditoria", "E-mails & Notificações"
+  const [activeTab, setActiveTab] = useState<'qualidade' | 'interacoes' | 'emails'>('qualidade');
   
+  // New observer email input
+  const [newObserverInput, setNewObserverInput] = useState('');
+  const [manualSubject, setManualSubject] = useState(`[Simon Dicompel] Atualização sobre Chamado ${ticket.id}`);
+  const [manualMessage, setManualMessage] = useState('');
+  const [isManualEmailSent, setIsManualEmailSent] = useState(false);
+
   // Comments input text
   const [newComment, setNewComment] = useState('');
 
@@ -114,6 +137,44 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
     const currentReminders = ticket.reminders || [];
     const updated = currentReminders.filter((r) => r.id !== reminderId);
     onUpdateReminders(ticket.id, updated);
+  };
+
+  // Observadores do Chamado e Notificações Manuais
+  const handleAddTicketObserver = (emailToAdd?: string) => {
+    const raw = (emailToAdd || newObserverInput).trim().toLowerCase();
+    if (!raw) return;
+    if (!raw.includes('@') || !raw.includes('.')) {
+      alert('Informe um e-mail válido (ex: observador@empresa.com.br).');
+      return;
+    }
+    const current = ticket.observers || [];
+    if (!current.includes(raw)) {
+      const updated = [...current, raw];
+      onUpdateObservers?.(ticket.id, updated, ticket.observerEmail || raw);
+    }
+    setNewObserverInput('');
+  };
+
+  const handleRemoveTicketObserver = (emailToRemove: string) => {
+    const current = ticket.observers || [];
+    const updated = current.filter((e) => e !== emailToRemove);
+    onUpdateObservers?.(ticket.id, updated, ticket.observerEmail === emailToRemove ? updated[0] : ticket.observerEmail);
+  };
+
+  const handleTriggerManualNotification = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualMessage.trim()) {
+      alert('Por favor, digite a mensagem a ser enviada aos envolvidos.');
+      return;
+    }
+    onSendManualNotification?.(
+      ticket,
+      manualSubject.trim() || `[Simon Dicompel] Atualização sobre Chamado ${ticket.id}`,
+      manualMessage.trim()
+    );
+    setIsManualEmailSent(true);
+    setManualMessage('');
+    setTimeout(() => setIsManualEmailSent(false), 3500);
   };
 
   // 5 Whys state
@@ -624,10 +685,47 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
             </div>
           </div>
 
-          {/* Section 5: Histórico de Tramitação e Log de Auditoria */}
+          {/* Section 5: Registro Fotográfico & Evidências Visuais (Fotos) */}
           <div className="space-y-2">
             <h2 className="text-xs font-bold bg-slate-100 px-2 py-1 uppercase text-slate-800 border-l-4 border-slate-800 font-mono">
-              5. Histórico Cronológico de Tramitação e Tratativa de SAC (Log de Auditoria)
+              5. Registro Fotográfico & Evidências Visuais (Fotos e Anexos de Comprovação)
+            </h2>
+            {ticket.files && ticket.files.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 border border-slate-300 p-3 rounded">
+                {ticket.files.map((file) => (
+                  <div key={file.id} className="border border-slate-250 rounded p-2 bg-slate-50 text-center">
+                    {file.url && (file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|webp|gif)$/i)) ? (
+                      <img
+                        src={file.url}
+                        alt={file.name}
+                        className="max-h-36 mx-auto object-contain rounded border border-slate-300 bg-white shadow-2xs"
+                      />
+                    ) : (
+                      <div className="h-28 flex flex-col items-center justify-center bg-white border border-slate-200 rounded p-2">
+                        <span className="text-2xl">📄</span>
+                        <span className="text-[9px] text-slate-700 font-bold truncate max-w-full mt-1">
+                          {file.name}
+                        </span>
+                      </div>
+                    )}
+                    <div className="mt-1 text-[8.5px] text-slate-600 font-mono">
+                      <p className="font-bold truncate">{file.name}</p>
+                      <p className="text-slate-400">{file.size} &bull; {file.type || 'Documento Técnico'}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="border border-slate-300 p-3 rounded bg-slate-50 text-slate-500 italic text-[10px]">
+                Nenhuma foto ou evidência visual anexada até o momento.
+              </div>
+            )}
+          </div>
+
+          {/* Section 6: Histórico de Tramitação e Log de Auditoria */}
+          <div className="space-y-2">
+            <h2 className="text-xs font-bold bg-slate-100 px-2 py-1 uppercase text-slate-800 border-l-4 border-slate-800 font-mono">
+              6. Histórico Cronológico de Tramitação e Tratativa de SAC (Log de Auditoria)
             </h2>
             <div className="border border-slate-300 rounded p-2.5 space-y-3 font-mono text-[9px]">
               {(() => {
@@ -692,7 +790,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
             </div>
           </div>
 
-          {/* Section 6: Assinaturas e Rodapé Homologatório */}
+          {/* Section 7: Assinaturas e Rodapé Homologatório */}
           <div className="pt-8 grid grid-cols-2 gap-8 text-[10px] text-center">
             <div className="space-y-1">
               <p className="text-slate-400">____________________________________________________________</p>
@@ -816,6 +914,17 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {/* Botão de Exportar Laudo (Estilo PDF via CSS print com fotos, histórico e parecer) */}
+          <button
+            id="btn-export-laudo-primary"
+            onClick={handlePrintTicketReport}
+            className="px-3.5 py-2 text-xs font-black bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md shadow-blue-500/25 flex items-center gap-1.5 transition-all cursor-pointer hover:scale-[1.02]"
+            title="Gerar laudo técnico pericial de conformidade ISO 9001 (imprimível em PDF com histórico e fotos)"
+          >
+            <Printer className="w-4 h-4 text-blue-200" />
+            <span>Exportar Laudo</span>
+          </button>
+
           {/* Change Status Controls wrapper - Available to Admin and Quality staff */}
           <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 w-max max-w-full">
             <span className="text-xs font-bold text-slate-500 px-2">Fluxo de Status:</span>
@@ -847,6 +956,31 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                   </button>
                 );
               })}
+
+              {/* Botão de Avanço de Status Automático (dispara e-mail automático aos envolvidos) */}
+              {ticket.status !== 'Finalizado' && isQualidadeOrAdmin && (
+                <button
+                  id="btn-auto-advance-step"
+                  onClick={() => {
+                    const nextOrder: Record<TicketStatus, TicketStatus> = {
+                      'Aberto': 'Em analise',
+                      'Em analise': 'Em tratativa',
+                      'Em tratativa': 'Resolvido',
+                      'Resolvido': 'Finalizado',
+                      'Finalizado': 'Finalizado',
+                    };
+                    const nextSt = nextOrder[ticket.status];
+                    if (nextSt && nextSt !== ticket.status) {
+                      onUpdateStatus(ticket.id, nextSt);
+                    }
+                  }}
+                  className="px-2.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs rounded-lg transition-all shadow-xs flex items-center gap-1 cursor-pointer ml-1"
+                  title="Avançar automaticamente para a próxima etapa do fluxo e notificar todos os envolvidos por e-mail"
+                >
+                  <Zap className="w-3.5 h-3.5 text-yellow-300" />
+                  <span>Avançar Etapa</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -915,10 +1049,10 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                   id="print-ticket-report-btn"
                   onClick={handlePrintTicketReport}
                   className="text-xs text-white bg-blue-600 hover:bg-blue-700 font-bold inline-flex items-center gap-1.5 py-1.5 px-3 rounded-lg shadow-sm transition-all hover:scale-[1.02] cursor-pointer"
-                  title="Gerar versão impressa estilizada para conformidade ISO"
+                  title="Gerar laudo pericial impresso de conformidade ISO 9001 (com fotos e histórico)"
                 >
                   <Printer className="w-3.5 h-3.5" />
-                  <span>Exportar Ticket</span>
+                  <span>Exportar Laudo</span>
                 </button>
                 <button
                   id="print-label-btn"
@@ -1086,6 +1220,92 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                         {ticket.returnUF || ticket.registeredUf || 'SP'}
                       </span>
                     </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Contatos, E-mails e Observadores */}
+              <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Contatos & Observadores do Chamado</span>
+                  </span>
+                  <span className="text-[9.5px] font-bold text-blue-800 bg-white px-2 py-0.5 rounded-full border border-blue-200">
+                    {(ticket.observers?.length || 0) + (ticket.observerEmail ? 1 : 0)} envolvido(s)
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 text-xs">
+                  {ticket.clientEmail && (
+                    <div className="flex items-center justify-between p-1.5 bg-white rounded-lg border border-blue-150">
+                      <span className="text-[11px] font-medium text-slate-700 flex items-center gap-1.5">
+                        <Mail className="w-3 h-3 text-slate-400" />
+                        <span>Cliente: <strong>{ticket.clientEmail}</strong></span>
+                      </span>
+                      <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded">
+                        Principal
+                      </span>
+                    </div>
+                  )}
+
+                  {ticket.observerEmail && !ticket.observers?.includes(ticket.observerEmail) && (
+                    <div className="flex items-center justify-between p-1.5 bg-white rounded-lg border border-blue-150">
+                      <span className="text-[11px] font-medium text-slate-700 flex items-center gap-1.5">
+                        <Mail className="w-3 h-3 text-blue-500" />
+                        <span>Notificação Adicional: <strong>{ticket.observerEmail}</strong></span>
+                      </span>
+                      <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded">
+                        Observador
+                      </span>
+                    </div>
+                  )}
+
+                  {ticket.observers && ticket.observers.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {ticket.observers.map((obs) => (
+                        <span
+                          key={obs}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-white border border-blue-200 rounded-md text-[10.5px] font-medium text-blue-950 shadow-3xs"
+                        >
+                          <Mail className="w-2.5 h-2.5 text-blue-600" />
+                          <span>{obs}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTicketObserver(obs)}
+                            className="text-slate-400 hover:text-rose-600 ml-0.5 font-bold cursor-pointer"
+                            title="Remover observador"
+                          >
+                            &times;
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Adicionar novo observador */}
+                  <div className="flex gap-1.5 pt-1.5 border-t border-blue-150">
+                    <input
+                      type="email"
+                      placeholder="Adicionar novo observador..."
+                      value={newObserverInput}
+                      onChange={(e) => setNewObserverInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddTicketObserver();
+                        }
+                      }}
+                      className="flex-1 px-2.5 py-1 text-xs border border-blue-200 rounded-lg bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleAddTicketObserver()}
+                      className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer shrink-0"
+                      title="Incluir observador"
+                    >
+                      + Incluir
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1328,7 +1548,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                     : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
                 }`}
               >
-                Análise de Causa Raiz & Plano de Ação
+                Análise de Causa Raiz & Plano
               </button>
               <button
                 id="tab-interacoes-btn"
@@ -1339,7 +1559,19 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                     : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
                 }`}
               >
-                Linha do Tempo & Histórico ({ticket.history.length + ticket.comments.length})
+                Histórico ({ticket.history.length + ticket.comments.length})
+              </button>
+              <button
+                id="tab-emails-btn"
+                onClick={() => setActiveTab('emails')}
+                className={`flex-1 py-4 text-center font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  activeTab === 'emails'
+                    ? 'border-blue-600 text-blue-650 bg-white'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
+                }`}
+              >
+                <Mail className="w-3.5 h-3.5 text-blue-500" />
+                <span>E-mails ({systemEmailLogs.length})</span>
               </button>
             </div>
 
@@ -1596,6 +1828,281 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                       </span>
                     )}
                   </div>
+                </div>
+
+              </div>
+            )}
+
+            {/* TAB CONTENT: Automated Emails and Notifications */}
+            {activeTab === 'emails' && (
+              <div className="p-6 space-y-6">
+                
+                {/* Header Information Banner */}
+                <div className="bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-900 p-4.5 rounded-xl text-white shadow-sm space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-400/30 flex items-center justify-center">
+                        <Mail className="w-4.5 h-4.5 text-blue-300" />
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-xs uppercase tracking-wider text-white">
+                          Envio de E-mails: sac@dicompel.com.br
+                        </h4>
+                        <p className="text-[10.5px] text-blue-200">
+                          Notificações automáticas do SAC & Gestão da Qualidade Simon Dicompel
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {onOpenSmtpConfig && (
+                      <button
+                        type="button"
+                        onClick={onOpenSmtpConfig}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-lg transition-all shadow-xs flex items-center gap-1.5 cursor-pointer self-start sm:self-auto border border-blue-400/40"
+                        title="Ver status do servidor SMTP e instruções de configuração para sac@dicompel.com.br"
+                      >
+                        <Server className="w-3.5 h-3.5 text-blue-200" />
+                        <span>Configurar / Testar SMTP</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="p-2.5 bg-black/25 rounded-lg border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-slate-300">
+                    <span>Remetente oficial cadastrado: <strong className="text-white">sac@dicompel.com.br</strong></span>
+                    <span className="text-[10px] text-blue-300 font-mono">Disparo automático em cada atualização</span>
+                  </div>
+                </div>
+
+                {/* Destinatários Ativos & Observadores */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+                      <Users className="w-4 h-4 text-blue-600" />
+                      <span>Destinatários e Observadores em Cópia</span>
+                    </span>
+                    <span className="text-[10.5px] font-bold text-blue-700 bg-white px-2 py-0.5 rounded-md border border-blue-150">
+                      {(ticket.observers?.length || 0) + (ticket.observerEmail ? 1 : 0) + (ticket.clientEmail ? 1 : 0)} destinatário(s)
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    {/* Cliente */}
+                    <div className="p-2 bg-white rounded-lg border border-slate-200 flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Consumidor / Solicitante:</span>
+                        <strong className="text-slate-800">{ticket.customerName || ticket.clientName}</strong>
+                        <span className="text-slate-500 ml-2 font-mono text-[11px]">
+                          ({ticket.clientEmail || 'contato@cliente-simon.com.br'})
+                        </span>
+                      </div>
+                      <span className="text-[9.5px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                        Destinatário Principal
+                      </span>
+                    </div>
+
+                    {/* Observadores */}
+                    <div className="p-2.5 bg-white rounded-lg border border-slate-200 space-y-2">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase block">Observadores em Cópia (CC):</span>
+                      
+                      <div className="flex flex-wrap gap-1.5 min-h-6">
+                        {ticket.observerEmail && !ticket.observers?.includes(ticket.observerEmail) && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-900 border border-emerald-200 text-xs font-semibold">
+                            <Mail className="w-3 h-3 text-emerald-600" />
+                            <span>{ticket.observerEmail}</span>
+                            <span className="text-[9px] bg-emerald-200/60 px-1 py-0.2 rounded font-bold">Adicional</span>
+                          </span>
+                        )}
+
+                        {ticket.observers && ticket.observers.length > 0 ? (
+                          ticket.observers.map((obs) => (
+                            <span
+                              key={obs}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-950 border border-blue-200 text-xs font-semibold shadow-3xs"
+                            >
+                              <Mail className="w-3 h-3 text-blue-600" />
+                              <span>{obs}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveTicketObserver(obs)}
+                                className="text-slate-400 hover:text-rose-600 ml-1 font-black cursor-pointer"
+                                title="Remover observador deste chamado"
+                              >
+                                &times;
+                              </button>
+                            </span>
+                          ))
+                        ) : (
+                          !ticket.observerEmail && <span className="text-slate-400 italic text-[11px]">Nenhum observador cadastrado.</span>
+                        )}
+                      </div>
+
+                      {/* Adicionar observador diretamente */}
+                      <div className="flex gap-2 pt-2 border-t border-slate-150">
+                        <input
+                          type="email"
+                          placeholder="Adicionar observador (ex: qualidade@dicompel.com.br)..."
+                          value={newObserverInput}
+                          onChange={(e) => setNewObserverInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddTicketObserver();
+                            }
+                          }}
+                          className="flex-1 px-3 py-1.5 border border-slate-250 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleAddTicketObserver()}
+                          className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Adicionar Observador</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Form para disparo de notificação manual imediata */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+                      <Send className="w-4 h-4 text-emerald-600" />
+                      <span>Disparar Notificação por E-mail aos Envolvidos</span>
+                    </span>
+                    {isManualEmailSent && (
+                      <span className="text-[10.5px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1 animate-in fade-in">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>E-mail despachado com sucesso!</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <form onSubmit={handleTriggerManualNotification} className="space-y-2.5">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Assunto do E-mail</label>
+                      <input
+                        type="text"
+                        value={manualSubject}
+                        onChange={(e) => setManualSubject(e.target.value)}
+                        className="w-full px-3 py-1.5 text-xs border border-slate-250 rounded-lg bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Mensagem para Envio</label>
+                      <textarea
+                        rows={2}
+                        placeholder="Escreva a mensagem ou comunicado sobre o andamento do chamado que será enviado a todos os envolvidos..."
+                        value={manualMessage}
+                        onChange={(e) => setManualMessage(e.target.value)}
+                        className="w-full px-3 py-2 text-xs border border-slate-250 rounded-lg bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Enviar Notificação Agora</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Histórico Cronológico de E-mails Enviados neste Chamado */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center justify-between border-b border-slate-200 pb-2">
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-blue-600" />
+                      <span>Log de E-mails Disparados ({systemEmailLogs.length})</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      Auditoria de Comunicações
+                    </span>
+                  </h4>
+
+                  {systemEmailLogs.length > 0 ? (
+                    <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                      {systemEmailLogs.map((log) => (
+                        <div
+                          key={log.id}
+                          className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-blue-300 transition-all space-y-2 shadow-2xs"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs pb-1.5 border-b border-slate-100">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-0.5 rounded text-[9.5px] font-black uppercase ${
+                                log.actionType === 'abertura' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                                log.actionType === 'atualizacao_status' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                                log.actionType === 'laudo_qualidade' ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' :
+                                'bg-slate-100 text-slate-700 border border-slate-200'
+                              }`}>
+                                {log.actionType.replace('_', ' ')}
+                              </span>
+                              <strong className="text-slate-800 text-xs font-bold truncate">
+                                {log.subject}
+                              </strong>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {new Date(log.timestamp).toLocaleDateString('pt-BR')} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[10.5px] text-slate-500 font-mono">
+                            <div className="space-y-0.5">
+                              <p><strong className="text-slate-700">De:</strong> {log.sender || 'sac@dicompel.com.br'}</p>
+                              <p><strong className="text-slate-700">Para:</strong> {log.recipientName} &lt;{log.recipientEmail}&gt;</p>
+                              {log.ccEmails && log.ccEmails.length > 0 && (
+                                <p><strong className="text-slate-700">CC (Observadores):</strong> {log.ccEmails.join(', ')}</p>
+                              )}
+                              <p className="text-[9.5px] text-slate-400">Canal: {log.serviceType}</p>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                              {log.deliveryStatus === 'sent' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9.5px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  <span>Entregue via SMTP</span>
+                                </span>
+                              ) : log.deliveryStatus === 'failed' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9.5px] font-bold bg-rose-100 text-rose-800 border border-rose-300" title={log.errorMessage}>
+                                  <AlertTriangle className="w-3 h-3 text-rose-600" />
+                                  <span>Falha SMTP</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9.5px] font-bold bg-amber-100 text-amber-900 border border-amber-300" title="Aguardando inserção de dados do servidor SMTP no arquivo .env">
+                                  <Clock className="w-3 h-3 text-amber-600" />
+                                  <span>Pendente .env SMTP</span>
+                                </span>
+                              )}
+
+                              {/* Link direto mailto para abrir no Outlook/Gmail com 1 clique */}
+                              <a
+                                href={`mailto:${log.recipientEmail}?${log.ccEmails && log.ccEmails.length > 0 ? `cc=${encodeURIComponent(log.ccEmails.join(','))}&` : ''}subject=${encodeURIComponent(log.subject)}&body=${encodeURIComponent(log.body)}`}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-800 rounded-lg border border-blue-200 transition-colors cursor-pointer"
+                                title="Abrir esta mensagem pronta no Outlook, Gmail ou Webmail padrão"
+                              >
+                                <ExternalLink className="w-3 h-3 text-blue-600" />
+                                <span>Abrir no Webmail / Outlook</span>
+                              </a>
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-150 text-[10.5px] text-slate-700 font-sans whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">
+                            {log.body}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-8 border border-dashed border-slate-200 rounded-xl text-center space-y-1">
+                      <Mail className="w-8 h-8 text-slate-300 mx-auto" />
+                      <p className="text-xs text-slate-500 font-semibold">Nenhum e-mail registrado ainda para este chamado.</p>
+                      <p className="text-[10px] text-slate-400">
+                        Quando você atualizar o status, cadastrar um laudo ou enviar uma mensagem, o registro do e-mail aparecerá aqui.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
               </div>

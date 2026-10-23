@@ -21,6 +21,7 @@ import { TicketList } from './components/TicketList';
 import { TicketDetails } from './components/TicketDetails';
 import { NewTicketModal } from './components/NewTicketModal';
 import { AdminConfigView } from './components/AdminConfigView';
+import { SmtpConfigModal } from './components/SmtpConfigModal';
 import { 
   LayoutDashboard, 
   FileText, 
@@ -159,6 +160,8 @@ export default function App() {
   // New ticket modal trigger
   const [isNewTicketModalOpen, setIsNewTicketModalOpen] = useState(false);
   const [isSpecialTicketMode, setIsSpecialTicketMode] = useState(false);
+  const [modalTicketType, setModalTicketType] = useState<'SAC' | 'DEVOLUÇÃO' | 'NÃO CONFORMIDADE'>('SAC');
+  const [isSmtpModalOpen, setIsSmtpModalOpen] = useState(false);
 
   // Login credentials state
   const [loginEmail, setLoginEmail] = useState('');
@@ -185,6 +188,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('q_tickets', JSON.stringify(tickets));
   }, [tickets]);
+
+  useEffect(() => {
+    localStorage.setItem('q_systemEmailLogs', JSON.stringify(systemEmailLogs));
+  }, [systemEmailLogs]);
 
   // Ref para rastrear as IDs de chamados que já foram "vistas" nesta sessão para não disparar notificações retroativas no primeiro carregamento
   const seenTicketIdsRef = useRef<Set<string>>(new Set<string>());
@@ -322,12 +329,133 @@ export default function App() {
     setSelectedTicketId(null);
   };
 
+  // Centralized automated email dispatcher for client and observers
+  const sendAutomatedTicketEmail = (
+    ticket: Ticket,
+    actionType: 'abertura' | 'atualizacao_status' | 'laudo_qualidade' | 'interacao_comentario' | 'atualizacao_geral',
+    subject: string,
+    introMessage: string,
+    extraDetails?: string,
+    forcedStatus?: string
+  ) => {
+    const timestamp = new Date().toISOString();
+    const recipientName = ticket.customerName || ticket.clientName || 'Cliente';
+    const cleanEmailBase = recipientName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const recipientEmail = ticket.clientEmail?.trim() || `${cleanEmailBase || 'contato'}@cliente-simon.com.br`;
+
+    // Reúne todos os observadores e o e-mail adicional
+    const ccList = new Set<string>();
+    if (ticket.observerEmail?.trim()) ccList.add(ticket.observerEmail.trim().toLowerCase());
+    if (ticket.observers && Array.isArray(ticket.observers)) {
+      ticket.observers.forEach((o) => {
+        if (o && o.trim()) ccList.add(o.trim().toLowerCase());
+      });
+    }
+    const ccEmails = Array.from(ccList);
+
+    const itemsSummary = ticket.items && ticket.items.length > 0
+      ? ticket.items.map(i => `• ${i.productCode} - ${i.productName} (Qtd: ${i.quantity} un) [Linha: ${i.productLine || 'Simon'}] | Defeito: ${i.defectCategory || ticket.issueType}`).join('\n')
+      : `• ${ticket.productCode} - ${ticket.productName} (Qtd: ${ticket.quantity} un) [Linha: ${ticket.productLine || 'Simon 20'}]`;
+
+    const body = `Prezado(a) ${recipientName},\n\n` +
+      `${introMessage}\n\n` +
+      `------------------------------------------------------------\n` +
+      `DADOS DO CHAMADO - SIMON DICOMPEL\n` +
+      `Código do Chamado: ${ticket.id}\n` +
+      `Tipo: ${ticket.ticketType || (ticket.id.startsWith('DEV') ? 'DEVOLUÇÃO' : ticket.id.startsWith('NCO') ? 'NÃO CONFORMIDADE' : 'SAC')}\n` +
+      `Status Atual: ${(forcedStatus || ticket.status).toUpperCase()}\n` +
+      `Data de Entrada: ${new Date(ticket.createdAt).toLocaleDateString('pt-BR')}\n` +
+      `Consumidor Final: ${ticket.customerName || ticket.clientName}\n` +
+      (ticket.resellerName ? `Revenda: ${ticket.resellerName}\n` : '') +
+      (ticket.invoiceNumber ? `Nota Fiscal: ${ticket.invoiceNumber}\n` : '') +
+      (ticket.batch ? `Lote Fabril: ${ticket.batch}\n` : '') +
+      (ticket.pacReversoRequested ? `PAC Reverso: ${ticket.pacReversoRequested} ${ticket.pacReversoCode ? `(Cód: ${ticket.pacReversoCode})` : ''}\n` : '') +
+      `------------------------------------------------------------\n` +
+      `PRODUTOS / ITENS DO CHAMADO:\n` +
+      `${itemsSummary}\n\n` +
+      (extraDetails ? `INFORMAÇÕES ADICIONAIS & TRATATIVA:\n${extraDetails}\n\n` : '') +
+      `OBSERVADORES EM CÓPIA:\n` +
+      (ccEmails.length > 0 ? ccEmails.map(c => `• ${c}`).join('\n') : '• qualidade@dicompel.com.br') + `\n\n` +
+      `Este e-mail foi gerado automaticamente pelo Sistema Simon Dicompel QualiSAC em conformidade com as diretivas ISO 9001.\n` +
+      `Para interagir neste chamado, responda a este e-mail ou acesse o portal do SAC.`;
+
+    const emailLog: SystemEmailLog = {
+      id: `email_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      timestamp,
+      ticketId: ticket.id,
+      sender: 'sac@dicompel.com.br',
+      recipientName,
+      recipientEmail,
+      ccEmails,
+      actionType,
+      status: forcedStatus || ticket.status,
+      subject,
+      body,
+      serviceType: 'SMTP Broker sac@dicompel.com.br',
+      deliveryStatus: 'pending_smtp',
+    };
+
+    setSystemEmailLogs((prev) => [emailLog, ...prev]);
+
+    // Dispara requisição HTTP ao endpoint Express com Nodemailer
+    fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: recipientEmail,
+        cc: ccEmails,
+        subject,
+        body,
+        ticketId: ticket.id,
+      }),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        setSystemEmailLogs((prev) =>
+          prev.map((l) => {
+            if (l.id === emailLog.id) {
+              if (data.success) {
+                return {
+                  ...l,
+                  deliveryStatus: 'sent',
+                  serviceType: `SMTP sac@dicompel.com.br (Entregue)`,
+                  messageId: data.messageId,
+                };
+              } else if (data.status === 'NEEDS_CONFIGURATION') {
+                return {
+                  ...l,
+                  deliveryStatus: 'pending_smtp',
+                  serviceType: 'Pendente Configuração SMTP (.env)',
+                  errorMessage: data.message,
+                };
+              } else {
+                return {
+                  ...l,
+                  deliveryStatus: 'failed',
+                  serviceType: 'Falha no Servidor SMTP',
+                  errorMessage: data.error || 'Erro ao conectar ao servidor de e-mail',
+                };
+              }
+            }
+            return l;
+          })
+        );
+      })
+      .catch((err) => {
+        console.warn('[Email Client] Falha ao chamar /api/send-email:', err);
+      });
+  };
+
   // C. Open Return/Non-Conformity Ticket
   const handleCreateTicket = (data: {
+    ticketType?: 'SAC' | 'DEVOLUÇÃO' | 'NÃO CONFORMIDADE';
     customerName: string;
     resellerName?: string;
     firstContactDate: string;
     clientName: string;
+    clientEmail?: string;
+    observerEmail?: string;
+    observers?: string[];
     productCode: string;
     productName: string;
     productLine: string;
@@ -352,9 +480,13 @@ export default function App() {
   }) => {
     if (!currentUser) return;
 
-    // SAC Ticket ID generation
-    const prefix = 'SAC';
-    const samePrefixTickets = tickets.filter((t) => t.id.startsWith(prefix));
+    // ID prefix generation based on selected type:
+    // SAC -> SAC-0001
+    // DEVOLUÇÃO -> DEV-0001
+    // NÃO CONFORMIDADE -> NCO-0001
+    const tType = data.ticketType || 'SAC';
+    const prefix = tType === 'DEVOLUÇÃO' ? 'DEV' : tType === 'NÃO CONFORMIDADE' ? 'NCO' : 'SAC';
+    const samePrefixTickets = tickets.filter((t) => t.id.startsWith(`${prefix}-`));
     let nextSeq = samePrefixTickets.length + 1;
     let newId = `${prefix}-${String(nextSeq).padStart(4, '0')}`;
     while (tickets.some((t) => t.id === newId)) {
@@ -364,6 +496,7 @@ export default function App() {
 
     const timestamp = new Date().toISOString();
     const sacDetails = [
+      `Tipo: ${tType}`,
       data.resellerName ? `Revenda: ${data.resellerName}` : null,
       data.customerName ? `Consumidor: ${data.customerName}` : null,
       data.productLine ? `Linha: ${data.productLine}` : null,
@@ -377,21 +510,25 @@ export default function App() {
     const newHist: HistoryStep = {
       id: `h_${Date.now()}`,
       ticketId: newId,
-      action: 'Abertura do Chamado',
+      action: `Abertura de Chamado [${tType}]`,
       userId: currentUser.id,
       userName: currentUser.name,
       userRole: currentUser.role,
-      details: `SAC registrou devolução de ${data.quantity} unidades (${data.items && data.items.length > 1 ? `${data.items.length} SKUs` : data.productName}) por motivo de ${data.issueType}${data.subCategory ? ` (${data.subCategory})` : ''}. Lote: ${data.batch || 'Não Informado'}${sacDetails ? ` | [Dados SAC] ${sacDetails}` : ''}`,
+      details: `${currentUser.name} registrou ocorrência [${tType}] de ${data.quantity} unidades (${data.items && data.items.length > 1 ? `${data.items.length} SKUs` : data.productName}) por motivo de ${data.issueType}${data.subCategory ? ` (${data.subCategory})` : ''}. Lote: ${data.batch || 'Não Informado'}${sacDetails ? ` | [Dados SAC] ${sacDetails}` : ''}`,
       timestamp,
     };
 
     const newTicket: Ticket = {
       id: newId,
       tenantId: activeTenant.id,
+      ticketType: tType,
       customerName: data.customerName,
       resellerName: data.resellerName,
       clientName: data.customerName,
       firstContactDate: data.firstContactDate,
+      clientEmail: data.clientEmail,
+      observerEmail: data.observerEmail,
+      observers: data.observers,
       productCode: data.productCode,
       productName: data.productName,
       productLine: data.productLine,
@@ -424,60 +561,39 @@ export default function App() {
     };
 
     setTickets((prev) => [newTicket, ...prev]);
+
+    // Dispara e-mail automático para o cliente e observadores sobre a abertura do chamado
+    sendAutomatedTicketEmail(
+      newTicket,
+      'abertura',
+      `[Simon Dicompel] Abertura de Chamado ${newTicket.id} - ${newTicket.customerName} [Status: Aberto]`,
+      `Confirmamos a abertura do chamado ${newTicket.id} (${tType}) em nosso sistema Simon Dicompel. Todas as pessoas envolvidas receberão atualizações automáticas do andamento.`,
+      `Relato da ocorrência:\n"${newTicket.description}"`
+    );
+
     setIsNewTicketModalOpen(false);
     setSelectedTicketId(newId); // open it immediately
     setActiveMenu('chamados');
   };
 
-  // D. Update Status & Log Action
+  // D. Update Status & Log Action + Dispara E-mails Automáticos
   const handleUpdateStatus = (ticketId: string, newStatus: TicketStatus) => {
     if (!currentUser) return;
 
-    // Find the current ticket before modifying it
     const currentTicket = tickets.find((t) => t.id === ticketId);
     if (!currentTicket) return;
 
-    // Check if status transitioned to Resolvido or Finalizado to trigger simulated email log
-    if (newStatus === 'Resolvido' || newStatus === 'Finalizado') {
-      const timestamp = new Date().toISOString();
-      const defectsStr = currentTicket.defects && currentTicket.defects.length > 0
-        ? currentTicket.defects.map(d => `• ${d.quantity} peças - ${d.description}`).join('\n')
-        : `• ${currentTicket.quantity} peças - ${currentTicket.description}`;
-
-      const emailSubject = `[QualiSAC] Notificação de Encerramento/Resolução - Ocorrência ${currentTicket.id} [${newStatus}]`;
-      const emailBody = `Prezado(a) gestor de qualidade de ${currentTicket.clientName || 'Cliente'},\n\n` +
-        `Notificamos que o chamado de sac de código ${currentTicket.id} registrando desvios no lote "${currentTicket.batch}" mudou para o status ${newStatus.toUpperCase()}.\n\n` +
-        `HISTÓRICO DA DEVOLUÇÃO:\n` +
-        `- Produto Reclamado: ${currentTicket.productName} (${currentTicket.productCode})\n` +
-        `- Tipo de Não Conformidade: ${currentTicket.issueType}\n\n` +
-        `DETALHAMENTO DO LAUDO DE PEÇAS DANIFICADAS:\n` +
-        `${defectsStr}\n\n` +
-        `PLANO DE TRATATIVA (ISO 9001):\n` +
-        `${currentTicket.qualityReport ? `- Causa Raiz: ${currentTicket.qualityReport.rootCause}\n- Ação de Bloqueio/Corretiva: ${currentTicket.qualityReport.correctiveAction}` : '- Aguardando publicação de relatório complementar técnico de Qualidade.'}\n\n` +
-        `Este email é um log automatizado simulando a integração de faturamento reversora e pós-venda.\n` +
-        `Enviado em conformidade com as diretivas de ouvidoria SAC.\n\n` +
-        `Cordialmente,\n` +
-        `Sistema Integrado de Notificações de Qualidade`;
-
-      const recipientName = currentTicket.clientName || 'Cliente';
-      const cleanEmailBase = recipientName.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const recipientEmail = `${cleanEmailBase || 'contato'}@empresa-cliente.com.br`;
-
-      const newEmailLog: SystemEmailLog = {
-        id: `email_${Date.now()}`,
-        timestamp,
-        ticketId,
-        sender: 'notificacoes@qualisac-gateway.com.br',
-        recipientName,
-        recipientEmail,
-        status: newStatus,
-        subject: emailSubject,
-        body: emailBody,
-        serviceType: 'Amazon SES SMTP Service (Simulado)',
-      };
-
-      setSystemEmailLogs((prev) => [newEmailLog, ...prev]);
-    }
+    // Dispara e-mail automático para cliente e observadores sobre a transição de status
+    sendAutomatedTicketEmail(
+      currentTicket,
+      'atualizacao_status',
+      `[Simon Dicompel] Atualização de Status: Chamado ${ticketId} -> ${newStatus.toUpperCase()}`,
+      `O chamado ${ticketId} teve seu status alterado para "${newStatus.toUpperCase()}" por ${currentUser.name} (${currentUser.role}).`,
+      currentTicket.qualityReport
+        ? `Diagnóstico de Qualidade:\n- Causa Raiz: ${currentTicket.qualityReport.rootCause}\n- Ação Corretiva: ${currentTicket.qualityReport.correctiveAction}\n- Responsável: ${currentTicket.qualityReport.responsible}`
+        : undefined,
+      newStatus
+    );
 
     setTickets((prev) =>
       prev.map((t) => {
@@ -490,7 +606,7 @@ export default function App() {
             userId: currentUser.id,
             userName: currentUser.name,
             userRole: currentUser.role,
-            details: `Status modificado para: '${newStatus}'.`,
+            details: `Status modificado para: '${newStatus}'. Notificação por e-mail despachada para os envolvidos.`,
             timestamp,
           };
           
@@ -506,9 +622,29 @@ export default function App() {
     );
   };
 
-  // E. Update Ticket Reminders / Subtasks
+  // E. Update Ticket Reminders / Subtasks (com avanço automático de status para Resolvido quando todas concluídas)
   const handleUpdateReminders = (ticketId: string, reminders: TicketReminder[]) => {
     if (!currentUser) return;
+
+    const currentTicket = tickets.find((t) => t.id === ticketId);
+    if (!currentTicket) return;
+
+    const allDone = reminders.length > 0 && reminders.every(r => r.completed);
+    let nextStatus = currentTicket.status;
+    if (allDone && (currentTicket.status === 'Em tratativa' || currentTicket.status === 'Em analise' || currentTicket.status === 'Aberto')) {
+      nextStatus = 'Resolvido';
+    }
+
+    if (allDone && nextStatus === 'Resolvido' && currentTicket.status !== 'Resolvido') {
+      sendAutomatedTicketEmail(
+        { ...currentTicket, reminders, status: 'Resolvido' },
+        'atualizacao_status',
+        `[Simon Dicompel] Tarefas Concluídas - Chamado ${ticketId} [Status: RESOLVIDO]`,
+        `Todas as tarefas e ações operacionais do chamado ${ticketId} foram concluídas com sucesso. O status foi atualizado automaticamente para RESOLVIDO.`,
+        `Checklist finalizado:\n${reminders.map(r => `✓ ${r.text}`).join('\n')}`,
+        'Resolvido'
+      );
+    }
 
     setTickets((prev) =>
       prev.map((t) => {
@@ -517,17 +653,18 @@ export default function App() {
           const newHist: HistoryStep = {
             id: `h_${Date.now()}_reminders`,
             ticketId,
-            action: 'Lembretes Atualizados',
+            action: nextStatus !== t.status ? `Tarefas Concluídas (Status: ${nextStatus})` : 'Lembretes Atualizados',
             userId: currentUser.id,
             userName: currentUser.name,
             userRole: currentUser.role,
-            details: `Remessas/Lembretes e tarefas atualizados. Total: ${reminders.length}`,
+            details: `Tarefas e lembretes atualizados. Concluídas: ${reminders.filter(r => r.completed).length}/${reminders.length}.${nextStatus !== t.status ? ` Status avançado automaticamente para ${nextStatus}.` : ''}`,
             timestamp,
           };
 
           return {
             ...t,
             reminders,
+            status: nextStatus,
             updatedAt: timestamp,
             history: [...t.history, newHist],
           };
@@ -537,9 +674,17 @@ export default function App() {
     );
   };
 
-  // F. Add Comment (Chat)
+  // F. Add Comment (Chat) (avança status de 'Aberto' para 'Em analise' automaticamente e notifica envolvidos)
   const handleAddComment = (ticketId: string, text: string) => {
     if (!currentUser) return;
+
+    const currentTicket = tickets.find((t) => t.id === ticketId);
+    if (!currentTicket) return;
+
+    let nextStatus = currentTicket.status;
+    if (currentTicket.status === 'Aberto') {
+      nextStatus = 'Em analise';
+    }
 
     const newComm: TicketComment = {
       id: `c_${Date.now()}`,
@@ -551,6 +696,16 @@ export default function App() {
       createdAt: new Date().toISOString(),
     };
 
+    // Dispara e-mail automático notificando a nova mensagem
+    sendAutomatedTicketEmail(
+      { ...currentTicket, status: nextStatus },
+      'interacao_comentario',
+      `[Simon Dicompel] Nova Mensagem no Chamado ${ticketId} por ${currentUser.name}`,
+      `${currentUser.name} (${currentUser.role}) enviou uma nova interação no chamado ${ticketId}.`,
+      `Mensagem:\n"${text}"`,
+      nextStatus
+    );
+
     setTickets((prev) =>
       prev.map((t) => {
         if (t.id === ticketId) {
@@ -558,16 +713,17 @@ export default function App() {
           const newHist: HistoryStep = {
             id: `h_${Date.now()}_comment`,
             ticketId,
-            action: 'Comentário Adicionado',
+            action: nextStatus !== t.status ? `Comentário Adicionado (Status: ${nextStatus})` : 'Comentário Adicionado',
             userId: currentUser.id,
             userName: currentUser.name,
             userRole: currentUser.role,
-            details: `Comentário: "${text.substring(0, 45)}..."`,
+            details: `Comentário: "${text.substring(0, 45)}..."${nextStatus !== t.status ? ` | Status alterado automaticamente para ${nextStatus}.` : ''}`,
             timestamp,
           };
 
           return {
             ...t,
+            status: nextStatus,
             comments: [...t.comments, newComm],
             updatedAt: timestamp,
             history: [...t.history, newHist],
@@ -578,9 +734,33 @@ export default function App() {
     );
   };
 
-  // F. Issue Root cause & corrective actions report
+  // G. Issue Root cause & corrective actions report (avança automaticamente para 'Em tratativa' e dispara e-mail)
   const handleUpdateQualityReport = (ticketId: string, report: QualityReport) => {
     if (!currentUser) return;
+
+    const currentTicket = tickets.find((t) => t.id === ticketId);
+    if (!currentTicket) return;
+
+    let nextStatus = currentTicket.status;
+    if (currentTicket.status === 'Aberto' || currentTicket.status === 'Em analise') {
+      nextStatus = 'Em tratativa';
+    }
+
+    // Dispara e-mail automático com o laudo técnico
+    sendAutomatedTicketEmail(
+      { ...currentTicket, qualityReport: report, status: nextStatus },
+      'laudo_qualidade',
+      `[Simon Dicompel] Parecer Técnico Emitido - Chamado ${ticketId} [Status: ${nextStatus.toUpperCase()}]`,
+      `O setor de Garantia da Qualidade emitiu o Parecer Técnico e Laudo de Não Conformidade para o chamado ${ticketId}. O chamado avançou automaticamente para o status "${nextStatus.toUpperCase()}".`,
+      `PARECER TÉCNICO (ISO 9001):\n` +
+      `- Causa Raiz: ${report.rootCause}\n` +
+      (report.fiveWhys && report.fiveWhys.some(w => w.trim()) ? `- Metodologia 5 Porquês:\n  ${report.fiveWhys.filter(w => w.trim()).map((w, idx) => `P${idx+1}: ${w}`).join('\n  ')}\n` : '') +
+      `- Ação Corretiva Imediata: ${report.correctiveAction}\n` +
+      `- Ação Preventiva de Longo Prazo: ${report.preventiveAction || 'Em monitoramento'}\n` +
+      `- Responsável Designado: ${report.responsible}\n` +
+      `- Prazo Alvo: ${report.targetDate ? new Date(report.targetDate).toLocaleDateString('pt-BR') : 'A definir'}`,
+      nextStatus
+    );
 
     setTickets((prev) =>
       prev.map((t) => {
@@ -589,20 +769,13 @@ export default function App() {
           const newHist: HistoryStep = {
             id: `h_${Date.now()}_report`,
             ticketId,
-            action: 'Salvar Relatório de Qualidade',
+            action: `Parecer Técnico Salvo (Status: ${nextStatus})`,
             userId: currentUser.id,
             userName: currentUser.name,
             userRole: currentUser.role,
-            details: `Causa Raiz inserida: "${report.rootCause.substring(0, 45)}...". Responsável: ${report.responsible}`,
+            details: `Causa Raiz inserida: "${report.rootCause.substring(0, 45)}...". Responsável: ${report.responsible}. Status atualizado para: ${nextStatus}. E-mail automático enviado aos envolvidos.`,
             timestamp,
           };
-
-          // Also automatically advance state to 'Em tratativa' if it is still 'Em analise' or 'Aberto' 
-          // to make the industrial workflow super intuitive!
-          let nextStatus = t.status;
-          if (t.status === 'Aberto' || t.status === 'Em analise') {
-            nextStatus = 'Em tratativa';
-          }
 
           return {
             ...t,
@@ -617,9 +790,17 @@ export default function App() {
     );
   };
 
-  // G. Add file attachment
+  // H. Add file attachment (avança automaticamente para 'Em analise' se ainda em 'Aberto' e notifica)
   const handleAddFile = (ticketId: string, name: string, size: string, type: string, url: string) => {
     if (!currentUser) return;
+
+    const currentTicket = tickets.find((t) => t.id === ticketId);
+    if (!currentTicket) return;
+
+    let nextStatus = currentTicket.status;
+    if (currentTicket.status === 'Aberto') {
+      nextStatus = 'Em analise';
+    }
 
     const newFile: TicketFile = {
       id: `file_${Date.now()}`,
@@ -629,6 +810,15 @@ export default function App() {
       url,
     };
 
+    sendAutomatedTicketEmail(
+      { ...currentTicket, status: nextStatus },
+      'atualizacao_geral',
+      `[Simon Dicompel] Nova Evidência Fotográfica Anexada no Chamado ${ticketId}`,
+      `${currentUser.name} (${currentUser.role}) vinculou um novo anexo/evidência (${name}, ${size}) ao chamado ${ticketId}.`,
+      `Arquivo: ${name} (${size})`,
+      nextStatus
+    );
+
     setTickets((prev) =>
       prev.map((t) => {
         if (t.id === ticketId) {
@@ -636,17 +826,50 @@ export default function App() {
           const newHist: HistoryStep = {
             id: `h_${Date.now()}_file`,
             ticketId,
-            action: 'Anexo de Comprovação Vinculado',
+            action: nextStatus !== t.status ? `Arquivo Anexado (Status: ${nextStatus})` : 'Anexo de Comprovação Vinculado',
             userId: currentUser.id,
             userName: currentUser.name,
             userRole: currentUser.role,
-            details: `Arquivo anexado: ${name}`,
+            details: `Arquivo anexado: ${name}${nextStatus !== t.status ? ` | Status alterado automaticamente para ${nextStatus}.` : ''}`,
             timestamp,
           };
 
           return {
             ...t,
+            status: nextStatus,
             files: [...t.files, newFile],
+            updatedAt: timestamp,
+            history: [...t.history, newHist],
+          };
+        }
+        return t;
+      })
+    );
+  };
+
+  // I. Update Observers
+  const handleUpdateObservers = (ticketId: string, updatedObservers: string[], observerEmail?: string) => {
+    if (!currentUser) return;
+
+    setTickets((prev) =>
+      prev.map((t) => {
+        if (t.id === ticketId) {
+          const timestamp = new Date().toISOString();
+          const newHist: HistoryStep = {
+            id: `h_${Date.now()}_obs`,
+            ticketId,
+            action: 'Observadores Atualizados',
+            userId: currentUser.id,
+            userName: currentUser.name,
+            userRole: currentUser.role,
+            details: `Observadores atualizados. Total: ${updatedObservers.length} e-mails em cópia.`,
+            timestamp,
+          };
+
+          return {
+            ...t,
+            observers: updatedObservers,
+            observerEmail: observerEmail || (updatedObservers.length > 0 ? updatedObservers[0] : undefined),
             updatedAt: timestamp,
             history: [...t.history, newHist],
           };
@@ -742,6 +965,7 @@ export default function App() {
       sender: 'notificacoes@qualisac-gateway.com.br',
       recipientName: 'Distribuidora Fenix S/A',
       recipientEmail: 'sac@distribuidorafenix.com.br',
+      actionType: 'atualizacao_geral',
       status: 'Resolvido',
       subject: '[QualiSAC] Teste de Canal SMTP - Ocorrência TK-TEST-999 [Resolvido]',
       body: `Prezado(a) gestor de qualidade de Distribuidora Fenix S/A,\n\n` +
@@ -1081,6 +1305,22 @@ export default function App() {
                     <span>Cadastros & Configs</span>
                   </button>
                 )}
+
+                {/* 5. Servidor de E-mail (sac@dicompel.com.br) */}
+                <button
+                  id="menu-smtp-config-btn"
+                  onClick={() => setIsSmtpModalOpen(true)}
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wide hover:bg-slate-800 hover:text-white transition-all text-left cursor-pointer text-slate-300"
+                  title="Configurar credenciais e testar envio real de e-mails para sac@dicompel.com.br"
+                >
+                  <div className="flex items-center gap-3">
+                    <Mail className="w-4 h-4 text-blue-400" />
+                    <span>E-mail (SMTP)</span>
+                  </div>
+                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 border border-blue-400/30 font-mono">
+                    SAC
+                  </span>
+                </button>
               </nav>
             </div>
 
@@ -1128,6 +1368,12 @@ export default function App() {
                 onAddFile={handleAddFile}
                 onDeleteTicket={handleDeleteTicket}
                 onUpdateReminders={handleUpdateReminders}
+                systemEmailLogs={systemEmailLogs.filter((l) => l.ticketId === activeTicket.id)}
+                onUpdateObservers={handleUpdateObservers}
+                onSendManualNotification={(ticketObj, subject, message) =>
+                  sendAutomatedTicketEmail(ticketObj, 'atualizacao_geral', subject, message)
+                }
+                onOpenSmtpConfig={() => setIsSmtpModalOpen(true)}
               />
             ) : (
               /* Toggle components resting in normal tabs router state */
@@ -1150,10 +1396,17 @@ export default function App() {
                     onSelectTicket={(id) => setSelectedTicketId(id)}
                     onOpenNewTicketModal={() => {
                       setIsSpecialTicketMode(false);
+                      setModalTicketType('SAC');
+                      setIsNewTicketModalOpen(true);
+                    }}
+                    onOpenNewTicketModalWithType={(type) => {
+                      setIsSpecialTicketMode(false);
+                      setModalTicketType(type);
                       setIsNewTicketModalOpen(true);
                     }}
                     onOpenNewSpecialTicketModal={() => {
                       setIsSpecialTicketMode(true);
+                      setModalTicketType('DEVOLUÇÃO');
                       setIsNewTicketModalOpen(true);
                     }}
                     canCreateTicket={canCreateTicket}
@@ -1269,6 +1522,16 @@ export default function App() {
           products={products}
           issueTypes={issueTypes}
           isSpecial={isSpecialTicketMode}
+          existingTickets={tickets}
+          initialTicketType={modalTicketType}
+        />
+      )}
+
+      {/* 6. SMTP Configuration & Test Modal */}
+      {isSmtpModalOpen && (
+        <SmtpConfigModal
+          isOpen={isSmtpModalOpen}
+          onClose={() => setIsSmtpModalOpen(false)}
         />
       )}
 
