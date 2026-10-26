@@ -19,7 +19,23 @@ import {
   Upload,
   FileSpreadsheet,
   Filter,
-  Search
+  Search,
+  Database,
+  Cloud,
+  Terminal,
+  ExternalLink,
+  Copy,
+  CheckCircle2,
+  RefreshCw,
+  Code,
+  FileText,
+  ChevronRight,
+  Sparkles,
+  ShieldCheck,
+  Layers,
+  Globe,
+  Laptop,
+  BookOpen
 } from 'lucide-react';
 
 interface AdminConfigViewProps {
@@ -59,7 +75,73 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
   
   tenants,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'products' | 'issueTypes' | 'users'>('products');
+  const [activeSubTab, setActiveSubTab] = useState<'products' | 'issueTypes' | 'users' | 'azureDb'>('products');
+  
+  // Azure Database states
+  const [azureStatus, setAzureStatus] = useState<{
+    configured: boolean;
+    host: string;
+    user: string;
+    database: string;
+    port: string;
+    message: string;
+  } | null>(null);
+  const [isLoadingAzureStatus, setIsLoadingAzureStatus] = useState(false);
+  const [copiedCodeKey, setCopiedCodeKey] = useState<string | null>(null);
+  const [activeAzureMethod, setActiveAzureMethod] = useState<'portal' | 'shell' | 'powershell' | 'github'>('portal');
+  const [isSqlModalOpen, setIsSqlModalOpen] = useState(false);
+  const [sqlModalContent, setSqlModalContent] = useState<string>('');
+  const [isLoadingSql, setIsLoadingSql] = useState(false);
+
+  const handleOpenSqlModal = async () => {
+    setIsSqlModalOpen(true);
+    if (!sqlModalContent) {
+      setIsLoadingSql(true);
+      try {
+        const res = await fetch('/api/azure/sql-content');
+        const data = await res.json();
+        if (data.success && data.content) {
+          setSqlModalContent(data.content);
+        }
+      } catch (err) {
+        console.error('Falha ao carregar SQL:', err);
+      } finally {
+        setIsLoadingSql(false);
+      }
+    }
+  };
+
+  const fetchAzureStatus = async () => {
+    setIsLoadingAzureStatus(true);
+    try {
+      const res = await fetch('/api/azure/status');
+      const data = await res.json();
+      setAzureStatus(data);
+    } catch {
+      setAzureStatus({
+        configured: false,
+        host: 'Não configurado (.env)',
+        user: 'Não configurado',
+        database: 'qualisac_db',
+        port: '1433',
+        message: 'Endpoint /api/azure/status indisponível'
+      });
+    } finally {
+      setIsLoadingAzureStatus(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (activeSubTab === 'azureDb' && !azureStatus) {
+      fetchAzureStatus();
+    }
+  }, [activeSubTab]);
+
+  const copyToClipboard = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedCodeKey(key);
+    setTimeout(() => setCopiedCodeKey(null), 2500);
+  };
   
   // Products states
   const [newProdCode, setNewProdCode] = useState('');
@@ -394,6 +476,18 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
         >
           <Users className="w-4 h-4" />
           <span>👥 Usuários</span>
+        </button>
+        <button
+          id="tab-config-azure"
+          onClick={() => setActiveSubTab('azureDb')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex-1 justify-center sm:flex-initial ${
+            activeSubTab === 'azureDb'
+              ? 'bg-white text-blue-600 shadow-sm'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Database className="w-4 h-4 text-blue-500" />
+          <span>☁️ Banco Azure & GitHub</span>
         </button>
       </div>
 
@@ -1117,6 +1211,624 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
               </table>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* SUB-TAB 4: AZURE DATABASE & STEP-BY-STEP GUIDES */}
+      {activeSubTab === 'azureDb' && (
+        <div className="space-y-6 animate-in fade-in duration-150 text-slate-700">
+          
+          {/* Status & Quick Action Banner */}
+          <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white p-6 rounded-2xl shadow-md border border-blue-800/40 relative overflow-hidden">
+            <div className="absolute right-0 top-0 translate-x-12 -translate-y-8 opacity-10 pointer-events-none">
+              <Cloud className="w-64 h-64 text-white" />
+            </div>
+
+            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-400/30 flex items-center justify-center">
+                    <Database className="w-4 h-4 text-blue-300" />
+                  </div>
+                  <h3 className="font-black text-base sm:text-lg uppercase tracking-wider text-white">
+                    Guia & Scripts de Criação do Banco de Dados no Azure
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-500/30 text-blue-200 border border-blue-400/40 font-mono">
+                    MICROSOFT AZURE SQL
+                  </span>
+                </div>
+                <p className="text-xs text-blue-200/90 mt-1.5 max-w-2xl leading-relaxed">
+                  Criamos scripts completos e automatizados para provisionar o banco de dados no Microsoft Azure e popular todas as tabelas de SAC, Devoluções, Laudos Técnicos e ISO 9001 da Simon Dicompel.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleOpenSqlModal}
+                  className="px-3.5 py-2 bg-blue-500 hover:bg-blue-400 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  title="Ver script SQL completo"
+                >
+                  <Code className="w-3.5 h-3.5" />
+                  <span>Ver Script SQL Completo</span>
+                </button>
+
+                <a
+                  href="/api/azure/download-sql"
+                  download="azure_sql_setup.sql"
+                  className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl border border-white/20 transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-xs"
+                  title="Baixar arquivo azure_sql_setup.sql"
+                >
+                  <Download className="w-3.5 h-3.5 text-blue-300" />
+                  <span>Baixar .SQL</span>
+                </a>
+
+                <a
+                  href="/api/azure/download-script"
+                  download="montar_banco_azure.sh"
+                  className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl border border-white/20 transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-xs"
+                  title="Baixar script Bash de automação"
+                >
+                  <Terminal className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>Baixar Script Bash (.sh)</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={fetchAzureStatus}
+                  disabled={isLoadingAzureStatus}
+                  className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl border border-white/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="Verificar status da conexão"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingAzureStatus ? 'animate-spin text-blue-300' : ''}`} />
+                  <span>Status</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Connection Info Strip */}
+            <div className="mt-5 pt-4 border-t border-blue-700/50 grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
+              <div>
+                <span className="text-[9.5px] uppercase font-bold text-blue-300/80 block">Host Azure SQL:</span>
+                <strong className="text-white truncate block">{azureStatus?.host || 'sql-qualisac-dicompel.database.windows.net'}</strong>
+              </div>
+              <div>
+                <span className="text-[9.5px] uppercase font-bold text-blue-300/80 block">Banco de Dados:</span>
+                <strong className="text-white">{azureStatus?.database || 'qualisac_db'}</strong>
+              </div>
+              <div>
+                <span className="text-[9.5px] uppercase font-bold text-blue-300/80 block">Usuário Admin:</span>
+                <strong className="text-white">{azureStatus?.user || 'qualisacadmin'}</strong>
+              </div>
+              <div>
+                <span className="text-[9.5px] uppercase font-bold text-blue-300/80 block">Porta / Status:</span>
+                <span className="text-emerald-400 font-bold flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Porta 1433 (T-SQL)</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Method Selector Tabs */}
+          <div className="flex border-b border-slate-200 gap-2 overflow-x-auto pb-1">
+            <button
+              type="button"
+              onClick={() => setActiveAzureMethod('portal')}
+              className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 cursor-pointer transition-all shrink-0 ${
+                activeAzureMethod === 'portal'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>Opção 1: Pelo Portal Azure Web (100% Visual)</span>
+              <span className="text-[9px] uppercase px-1.5 py-0.2 rounded font-black bg-amber-400 text-amber-950">Mais Fácil</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveAzureMethod('shell')}
+              className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 cursor-pointer transition-all shrink-0 ${
+                activeAzureMethod === 'shell'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+              }`}
+            >
+              <Terminal className="w-3.5 h-3.5" />
+              <span>Opção 2: Azure Cloud Shell (1 Linha)</span>
+              <span className="text-[9px] uppercase px-1.5 py-0.2 rounded font-black bg-emerald-400 text-emerald-950">Rápido</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveAzureMethod('powershell')}
+              className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 cursor-pointer transition-all shrink-0 ${
+                activeAzureMethod === 'powershell'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+              }`}
+            >
+              <Laptop className="w-3.5 h-3.5" />
+              <span>Opção 3: PowerShell (Windows)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveAzureMethod('github')}
+              className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 cursor-pointer transition-all shrink-0 ${
+                activeAzureMethod === 'github'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+              }`}
+            >
+              <Cloud className="w-3.5 h-3.5" />
+              <span>Opção 4: GitHub Actions (CI/CD)</span>
+            </button>
+          </div>
+
+          {/* TAB CONTENT 1: PORTAL AZURE WEB (100% VISUAL) */}
+          {activeAzureMethod === 'portal' && (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 card-shadow space-y-6">
+              <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-blue-600" />
+                    <span>Passo a Passo: Como Criar o Banco no Portal do Azure (Sem Instalar Nada)</span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Você pode criar tudo diretamente pelo seu navegador em menos de 5 minutos.
+                  </p>
+                </div>
+                <a
+                  href="https://portal.azure.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-lg border border-blue-200 transition-all flex items-center gap-1.5 self-start shrink-0"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Abrir portal.azure.com</span>
+                </a>
+              </div>
+
+              {/* 5 Guided Steps */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                
+                {/* Passo 1 */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-mono font-black text-xs flex items-center justify-center">1</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Início</span>
+                  </div>
+                  <h5 className="font-extrabold text-xs text-slate-800">Acesse e Crie o Banco SQL</h5>
+                  <p className="text-[11.5px] text-slate-600 leading-relaxed">
+                    No portal, digite <strong>"Bancos de dados SQL"</strong> na barra de pesquisa superior e clique no botão <strong>+ Criar</strong> (Create).
+                  </p>
+                </div>
+
+                {/* Passo 2 */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-mono font-black text-xs flex items-center justify-center">2</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Configuração Básica</span>
+                  </div>
+                  <h5 className="font-extrabold text-xs text-slate-800">Preencha os Campos</h5>
+                  <ul className="text-[11px] text-slate-600 space-y-1">
+                    <li>• <strong>Grupo de Recursos:</strong> Criar novo <code>rg-qualisac-dicompel</code></li>
+                    <li>• <strong>Nome do Banco:</strong> <code>qualisac_db</code></li>
+                    <li>• <strong>Servidor:</strong> Criar novo (veja Passo 3)</li>
+                  </ul>
+                </div>
+
+                {/* Passo 3 */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-mono font-black text-xs flex items-center justify-center">3</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Criar Servidor</span>
+                  </div>
+                  <h5 className="font-extrabold text-xs text-slate-800">Defina o Servidor e Senha</h5>
+                  <ul className="text-[11px] text-slate-600 space-y-1">
+                    <li>• <strong>Nome:</strong> <code>sql-qualisac-dicompel</code> (ou adicione dígitos caso indisponível)</li>
+                    <li>• <strong>Região:</strong> Brazil South ou East US</li>
+                    <li>• <strong>Autenticação:</strong> Usar autenticação do SQL</li>
+                    <li>• <strong>Logon de Admin:</strong> <code>qualisacadmin</code></li>
+                    <li>• <strong>Senha:</strong> Defina sua senha forte</li>
+                  </ul>
+                </div>
+
+                {/* Passo 4 */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-mono font-black text-xs flex items-center justify-center">4</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Rede / Firewall</span>
+                  </div>
+                  <h5 className="font-extrabold text-xs text-slate-800">Liberar Acesso no Firewall</h5>
+                  <p className="text-[11.5px] text-slate-600 leading-relaxed">
+                    Na aba <strong>Rede (Networking)</strong>:
+                  </p>
+                  <ul className="text-[11px] text-slate-600 space-y-1">
+                    <li>• Marque <strong>"Permitir serviços do Azure acessem este servidor"</strong> como <strong>SIM</strong>.</li>
+                    <li>• Marque <strong>"Adicionar endereço IP do cliente atual"</strong> como <strong>SIM</strong>.</li>
+                  </ul>
+                </div>
+
+                {/* Passo 5 */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5 md:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-mono font-black text-xs flex items-center justify-center">5</span>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">Etapa Final</span>
+                  </div>
+                  <h5 className="font-extrabold text-xs text-slate-800">Executar o Script SQL no Editor do Portal</h5>
+                  <p className="text-[11.5px] text-slate-600 leading-relaxed">
+                    Após o Azure terminar a implantação:
+                  </p>
+                  <ol className="text-[11px] text-slate-600 space-y-1 list-decimal list-inside">
+                    <li>Entre no seu banco <strong>qualisac_db</strong> no portal.</li>
+                    <li>No menu lateral esquerdo, clique em <strong>Editor de consultas (versão prévia)</strong>.</li>
+                    <li>Faça login com seu usuário <code>qualisacadmin</code> e sua senha.</li>
+                    <li>Clique no botão <strong>"Ver Script SQL Completo"</strong> abaixo, copie todo o texto, cole no editor e clique no botão azul <strong>Executar (Run)</strong>.</li>
+                  </ol>
+                  <div className="pt-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleOpenSqlModal}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copiar Script SQL Completo</span>
+                    </button>
+                    <span className="text-[11px] text-emerald-700 font-bold">
+                      Cria tabelas, índices e dados iniciais da Simon Dicompel!
+                    </span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* TAB CONTENT 2: AZURE CLOUD SHELL (BASH) */}
+          {activeAzureMethod === 'shell' && (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 card-shadow space-y-5">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                    <Terminal className="w-4 h-4 text-emerald-600" />
+                    <span>Execução Automática via Azure Cloud Shell (1 Linha)</span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    O Azure Cloud Shell já tem o Azure CLI instalado e configurado com a sua conta.
+                  </p>
+                </div>
+                <a
+                  href="https://shell.azure.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-lg border border-emerald-200 transition-all flex items-center gap-1.5 shrink-0"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Abrir shell.azure.com</span>
+                </a>
+              </div>
+
+              <div className="space-y-3">
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 leading-relaxed">
+                  <strong>Como fazer:</strong> Abra <a href="https://shell.azure.com" target="_blank" rel="noreferrer" className="underline font-bold">shell.azure.com</a> no navegador, selecione <strong>Bash</strong> e execute o script incluído neste projeto:
+                </div>
+
+                <div className="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-xs overflow-x-auto relative group">
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800 text-[10px] text-slate-400">
+                    <span>COMANDO PARA O CLOUD SHELL / LINUX:</span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard('bash scripts/montar_banco_azure.sh', 'bash_cmd')}
+                      className="text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      {copiedCodeKey === 'bash_cmd' ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedCodeKey === 'bash_cmd' ? 'Copiado!' : 'Copiar'}</span>
+                    </button>
+                  </div>
+                  <code>bash scripts/montar_banco_azure.sh</code>
+                </div>
+
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 space-y-1">
+                  <p className="font-bold text-slate-800">O que o script executa automaticamente:</p>
+                  <p>1. Verifica ou solicita autenticação no Azure via <code>az login</code>.</p>
+                  <p>2. Cria o Grupo de Recursos <code>rg-qualisac-dicompel</code> na região Brasil Sul (ou desejada).</p>
+                  <p>3. Cria o Servidor SQL gerenciado e configura as regras de firewall para serviços na nuvem e IP atual.</p>
+                  <p>4. Cria o banco de dados <code>qualisac_db</code> na camada econômica Basic.</p>
+                  <p>5. Exibe a Connection String pronta e as variáveis para o seu arquivo <code>.env</code>.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB CONTENT 3: POWERSHELL (WINDOWS) */}
+          {activeAzureMethod === 'powershell' && (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 card-shadow space-y-5">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                    <Laptop className="w-4 h-4 text-blue-600" />
+                    <span>Execução no Windows via PowerShell</span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Execute o script PowerShell nativo incluído no projeto: <code className="font-bold text-blue-600">scripts/montar_banco_azure.ps1</code>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 leading-relaxed">
+                  Abra o <strong>Windows PowerShell</strong> como Administrador e execute:
+                </div>
+
+                <div className="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-xs overflow-x-auto relative group">
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800 text-[10px] text-slate-400">
+                    <span>COMANDO POWERSHELL:</span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard('powershell -ExecutionPolicy Bypass -File .\\scripts\\montar_banco_azure.ps1', 'ps_cmd')}
+                      className="text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      {copiedCodeKey === 'ps_cmd' ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedCodeKey === 'ps_cmd' ? 'Copiado!' : 'Copiar'}</span>
+                    </button>
+                  </div>
+                  <code>powershell -ExecutionPolicy Bypass -File .\scripts\montar_banco_azure.ps1</code>
+                </div>
+
+                <p className="text-[11px] text-slate-500">
+                  O script fará o login no Azure, criará os recursos e exibirá todas as configurações para colocar no seu arquivo <code>.env</code>.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* TAB CONTENT 4: GITHUB ACTIONS (CI/CD) */}
+          {activeAzureMethod === 'github' && (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 card-shadow space-y-6">
+              <div className="border-b border-slate-100 pb-3">
+                <h4 className="text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                  <Cloud className="w-4 h-4 text-purple-600" />
+                  <span>Criação do Banco de Dados no Azure através do GitHub Actions</span>
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Permite ao GitHub criar e atualizar a infraestrutura no Azure automaticamente via CI/CD.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                
+                {/* Passo 1 */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-mono font-bold text-xs flex items-center justify-center">1</span>
+                      <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">Terminal / Azure CLI</span>
+                    </div>
+                    <h5 className="font-bold text-xs text-slate-800 uppercase">Gerar Credencial no Azure</h5>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      No Azure Cloud Shell (<a href="https://shell.azure.com" target="_blank" rel="noreferrer" className="underline font-bold text-blue-600">shell.azure.com</a>) ou no terminal com <code>az login</code>, execute o comando para criar a permissão do GitHub:
+                    </p>
+                    <div className="bg-slate-900 text-slate-100 p-2.5 rounded-lg font-mono text-[10px] overflow-x-auto relative group">
+                      <code>az ad sp create-for-rbac --name "github-actions-qualisac" --role contributor --sdk-auth</code>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard('az ad sp create-for-rbac --name "github-actions-qualisac" --role contributor --sdk-auth', 'sp_cmd')}
+                    className="w-full mt-2 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-lg border border-slate-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    {copiedCodeKey === 'sp_cmd' ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
+                    <span>{copiedCodeKey === 'sp_cmd' ? 'Comando Copiado!' : 'Copiar Comando CLI'}</span>
+                  </button>
+                </div>
+
+                {/* Passo 2 */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-mono font-bold text-xs flex items-center justify-center">2</span>
+                      <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">GitHub Settings</span>
+                    </div>
+                    <h5 className="font-bold text-xs text-slate-800 uppercase">Salvar Secret no GitHub</h5>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      No seu repositório no GitHub, vá em <strong>Settings</strong> &gt; <strong>Secrets and variables</strong> &gt; <strong>Actions</strong> &gt; <strong>New repository secret</strong>:
+                    </p>
+                    <ul className="text-[11px] text-slate-700 space-y-1 list-disc list-inside">
+                      <li>Nome: <code className="font-bold text-blue-700">AZURE_CREDENTIALS</code></li>
+                      <li>Valor: Cole o JSON retornado pelo comando do Passo 1.</li>
+                    </ul>
+                  </div>
+                  <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-[10.5px] text-blue-900">
+                    Isso permite ao GitHub se autenticar com segurança na sua assinatura do Azure.
+                  </div>
+                </div>
+
+                {/* Passo 3 */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-mono font-bold text-xs flex items-center justify-center">3</span>
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">GitHub Actions</span>
+                    </div>
+                    <h5 className="font-bold text-xs text-slate-800 uppercase">Executar Workflow no GitHub</h5>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Acesse a aba <strong>Actions</strong> no seu repositório no GitHub, selecione <strong>"Provisionar e Configurar Banco de Dados Azure"</strong> e clique em <strong>Run workflow</strong>.
+                    </p>
+                    <p className="text-[10.5px] text-slate-500">
+                      O GitHub criará o Resource Group, o Servidor SQL, o Banco e aplicará automaticamente todo o schema de SAC e Qualidade.
+                    </p>
+                  </div>
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[10.5px] text-emerald-900 font-bold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Arquivo: deploy-azure-database.yml</span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* Variáveis para o .env */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Bloco 1: Variáveis para o .env */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 card-shadow space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <span className="text-xs font-bold text-slate-800 uppercase flex items-center gap-1.5">
+                  <Terminal className="w-4 h-4 text-blue-600" />
+                  <span>Configuração de Conexão (.env)</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(`AZURE_DB_HOST="sql-qualisac-dicompel.database.windows.net"\nAZURE_DB_USER="qualisacadmin"\nAZURE_DB_PASSWORD="SuaSenhaForteAqui!"\nAZURE_DB_NAME="qualisac_db"\nAZURE_DB_PORT=1433\nAZURE_DB_SSL=true`, 'env_block')}
+                  className="text-[11px] text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  {copiedCodeKey === 'env_block' ? <CheckCircle2 className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedCodeKey === 'env_block' ? 'Copiado!' : 'Copiar Bloco'}</span>
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Após criar o banco no Azure por qualquer um dos métodos, adicione estas variáveis no seu <code>.env</code>:
+              </p>
+              <pre className="bg-slate-900 text-slate-100 p-3.5 rounded-xl font-mono text-[11px] leading-relaxed overflow-x-auto">
+{`AZURE_DB_HOST="sql-qualisac-dicompel.database.windows.net"
+AZURE_DB_USER="qualisacadmin"
+AZURE_DB_PASSWORD="SuaSenhaForteAqui!"
+AZURE_DB_NAME="qualisac_db"
+AZURE_DB_PORT=1433
+AZURE_DB_SSL=true`}
+              </pre>
+            </div>
+
+            {/* Bloco 2: Scripts Inclusos no Projeto */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 card-shadow space-y-3">
+              <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800 uppercase flex items-center gap-1.5">
+                  <Database className="w-4 h-4 text-emerald-600" />
+                  <span>Arquivos de Scripts Disponíveis no Repositório</span>
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">100% Prontos</span>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Você pode utilizar os arquivos diretamente do seu projeto local:
+              </p>
+              <div className="space-y-2">
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                  <div>
+                    <strong className="text-xs text-slate-800 block">scripts/montar_banco_azure.sh</strong>
+                    <span className="text-[10px] text-slate-500">Script Bash de automação total (Azure Cloud Shell / Linux)</span>
+                  </div>
+                  <a
+                    href="/api/azure/download-script"
+                    download="montar_banco_azure.sh"
+                    className="px-2.5 py-1 rounded text-[10.5px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>Baixar</span>
+                  </a>
+                </div>
+
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                  <div>
+                    <strong className="text-xs text-slate-800 block">azure_sql_setup.sql</strong>
+                    <span className="text-[10px] text-slate-500">Script T-SQL para criação das tabelas e dados da Simon Dicompel</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleOpenSqlModal}
+                    className="px-2.5 py-1 rounded text-[10.5px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <Code className="w-3 h-3" />
+                    <span>Ver / Copiar</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-1 text-[11px] text-slate-500">
+                Consulte o arquivo <strong>AZURE_GITHUB_DATABASE_GUIA.md</strong> na raiz para a documentação detalhada.
+              </div>
+            </div>
+
+          </div>
+
+          {/* SQL SCRIPT VIEWER MODAL */}
+          {isSqlModalOpen && (
+            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                {/* Header */}
+                <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+                      <Code className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-sm text-slate-800 uppercase">
+                        Script DDL: azure_sql_setup.sql
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        Criação das tabelas de SAC, Chamados, Laudos Técnicos ISO 9001 e Simon Dicompel
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(sqlModalContent, 'modal_sql')}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    >
+                      {copiedCodeKey === 'modal_sql' ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedCodeKey === 'modal_sql' ? 'Copiado para Área de Transferência!' : 'Copiar Tudo'}</span>
+                    </button>
+                    <a
+                      href="/api/azure/download-sql"
+                      download="azure_sql_setup.sql"
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Baixar</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setIsSqlModalOpen(false)}
+                      className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 transition-all cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="p-4 flex-1 overflow-y-auto bg-slate-900 text-slate-100 font-mono text-[11px] leading-relaxed select-all">
+                  {isLoadingSql ? (
+                    <div className="py-20 text-center text-slate-400 flex flex-col items-center gap-2">
+                      <RefreshCw className="w-6 h-6 animate-spin text-blue-400" />
+                      <span>Carregando script SQL...</span>
+                    </div>
+                  ) : (
+                    <pre className="whitespace-pre-wrap">{sqlModalContent || 'Carregando script SQL...'}</pre>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
+                  <span>Dica: Cole este script no <strong>Editor de consultas</strong> do seu banco no Portal Azure.</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsSqlModalOpen(false)}
+                    className="px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg transition-all cursor-pointer text-xs"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       )}
 

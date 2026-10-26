@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 
@@ -149,7 +150,61 @@ ${body}
   }
 });
 
-// 3. Vite development server or production static files
+// 3. Azure Database Status & Configuration Info
+app.get('/api/azure/status', (req, res) => {
+  const host = process.env.AZURE_DB_HOST || '';
+  const user = process.env.AZURE_DB_USER || '';
+  const db = process.env.AZURE_DB_NAME || 'qualisac_db';
+  const port = process.env.AZURE_DB_PORT || '1433';
+  const hasConfig = Boolean(host && user);
+
+  res.json({
+    configured: hasConfig,
+    host: host || 'Não configurado (.env)',
+    user: user || 'Não configurado',
+    database: db,
+    port,
+    workflowFile: '.github/workflows/deploy-azure-database.yml',
+    sqlFile: 'azure_sql_setup.sql',
+    scriptFile: 'scripts/montar_banco_azure.sh',
+    message: hasConfig
+      ? `Configuração do Azure Database encontrada: ${host}`
+      : 'Banco de dados Azure ainda não configurado no .env local. Utilize o GitHub Actions ou os scripts prontos para criar no Azure!'
+  });
+});
+
+// Download SQL script
+app.get('/api/azure/download-sql', (req, res) => {
+  const filePath = path.resolve(__dirname, 'azure_sql_setup.sql');
+  if (fs.existsSync(filePath)) {
+    res.download(filePath, 'azure_sql_setup.sql');
+  } else {
+    res.status(404).send('Arquivo SQL não encontrado.');
+  }
+});
+
+// Download Bash deployment script
+app.get('/api/azure/download-script', (req, res) => {
+  const filePath = path.resolve(__dirname, 'scripts', 'montar_banco_azure.sh');
+  if (fs.existsSync(filePath)) {
+    res.download(filePath, 'montar_banco_azure.sh');
+  } else {
+    res.status(404).send('Arquivo de script não encontrado.');
+  }
+});
+
+// Get SQL file text content for in-browser copy/view
+app.get('/api/azure/sql-content', (req, res) => {
+  const filePath = path.resolve(__dirname, 'azure_sql_setup.sql');
+  if (fs.existsSync(filePath)) {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    res.json({ success: true, filename: 'azure_sql_setup.sql', content });
+  } else {
+    res.status(404).json({ success: false, error: 'Arquivo SQL não encontrado.' });
+  }
+});
+
+// 4. Vite development server or production static files
 if (process.env.NODE_ENV !== 'production') {
   const { createServer } = await import('vite');
   const vite = await createServer({

@@ -1,0 +1,241 @@
+name: Provisionar e Configurar Banco de Dados Azure
+
+on:
+  workflow_dispatch:
+    inputs:
+      db_type:
+        description: 'Tipo de Banco de Dados no Azure'
+        required: true
+        type: choice
+        options:
+          - 'azure-sql'
+          - 'azure-postgres'
+        default: 'azure-sql'
+      resource_group:
+        description: 'Nome do Grupo de Recursos (Resource Group)'
+        required: true
+        default: 'rg-qualisac-dicompel'
+      location:
+        description: 'Região do Azure'
+        required: true
+        default: 'brazilsouth'
+      server_name:
+        description: 'Nome do Servidor Azure (deve ser único globalmente, letras minúsculas e números)'
+        required: true
+        default: 'sql-qualisac-dicompel'
+      db_name:
+        description: 'Nome do Banco de Dados'
+        required: true
+        default: 'qualisac_db'
+      admin_user:
+        description: 'Usuário Administrador do Banco'
+        required: true
+        default: 'qualisacadmin'
+      admin_password:
+        description: 'Senha do Administrador (mínimo 8 dígitos, letras maiúsculas, minúsculas, números e símbolos)'
+        required: true
+        type: string
+
+  # Disparo automático se houver alteração nos scripts SQL no branch main
+  push:
+    branches:
+      - main
+    paths:
+      - 'azure_sql_setup.sql'
+      - 'azure-sql-schema.sql'
+      - 'azure_setup.sql'
+
+jobs:
+  deploy-database:
+    name: Criar e Configurar Banco Azure
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar Código do Repositório (Checkout)
+        uses: actions/checkout@v4
+
+      - name: Conectar ao Microsoft Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # =====================================================================
+      # FLUXO 1: AZURE SQL DATABASE (T-SQL / SQL Server)
+      # =====================================================================
+      - name: Criar Recursos no Azure SQL Database
+        if: ${{ github.event.inputs.db_type == 'azure-sql' || github.event_name == 'push' }}
+        shell: bash
+        run: |
+          set -e
+          RG="${{ github.event.inputs.resource_group || 'rg-qualisac-dicompel' }}"
+          LOCATION="${{ github.event.inputs.location || 'brazilsouth' }}"
+          SERVER="${{ github.event.inputs.server_name || 'sql-qualisac-dicompel' }}"
+          DB="${{ github.event.inputs.db_name || 'qualisac_db' }}"
+          ADMIN="${{ github.event.inputs.admin_user || 'qualisacadmin' }}"
+          PASSWORD="${{ github.event.inputs.admin_password || secrets.AZURE_DB_PASSWORD }}"
+
+          echo "::group::1. Criando Resource Group no Azure"
+          az group create --name "$RG" --location "$LOCATION"
+          echo "::endgroup::"
+
+          echo "::group::2. Criando Servidor Azure SQL Server: $SERVER"
+          # Cria o servidor SQL se não existir
+          if ! az sql server show --name "$SERVER" --resource-group "$RG" &>/dev/null; then
+            az sql server create \
+              --name "$SERVER" \
+              --resource-group "$RG" \
+              --location "$LOCATION" \
+              --admin-user "$ADMIN" \
+              --admin-password "$PASSWORD"
+            echo "Servidor $SERVER criado com sucesso!"
+          else
+            echo "Servidor $SERVER já existe, prosseguindo..."
+          fi
+          echo "::endgroup::"
+
+          echo "::group::3. Configurando Firewall do Servidor Azure SQL"
+          # Permite conexões de serviços Azure
+          az sql server firewall-rule create \
+            --resource-group "$RG" \
+            --server "$SERVER" \
+            --name "AllowAzureServices" \
+            --start-ip-address "0.0.0.0" \
+            --end-ip-address "0.0.0.0" || true
+
+          # Libera o IP atual do runner do GitHub Actions
+          RUNNER_IP=$(curl -s https://api.ipify.org)
+          echo "IP do GitHub Runner: $RUNNER_IP"
+          az sql server firewall-rule create \
+            --resource-group "$RG" \
+            --server "$SERVER" \
+            --name "AllowGitHubRunner" \
+            --start-ip-address "$RUNNER_IP" \
+            --end-ip-address "$RUNNER_IP" || true
+          echo "::endgroup::"
+
+          echo "::group::4. Criando Banco de Dados $DB (Camada Básica com menor custo)"
+          if ! az sql db show --name "$DB" --server "$SERVER" --resource-group "$RG" &>/dev/null; then
+            az sql db create \
+              --resource-group "$RG" \
+              --server "$SERVER" \
+              --name "$DB" \
+              --service-objective "Basic" \
+              --max-size "2GB"
+            echo "Banco de dados $DB criado com sucesso!"
+          else
+            echo "Banco $DB já existe, prosseguindo para aplicação do schema..."
+          fi
+          echo "::endgroup::"
+
+      - name: Executar Schema e Carga Inicial no Azure SQL
+        if: ${{ github.event.inputs.db_type == 'azure-sql' || github.event_name == 'push' }}
+        uses: azure/sql-action@v2
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING || format('Server=tcp:{0}.database.windows.net,1433;Initial Catalog={1};Persist Security Info=False;User ID={2};Password={3};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;', github.event.inputs.server_name || 'sql-qualisac-dicompel', github.event.inputs.db_name || 'qualisac_db', github.event.inputs.admin_user || 'qualisacadmin', github.event.inputs.admin_password || secrets.AZURE_DB_PASSWORD) }}
+          path: './azure_sql_setup.sql'
+
+      # =====================================================================
+      # FLUXO 2: AZURE DATABASE FOR POSTGRESQL (Flexible Server)
+      # =====================================================================
+      - name: Criar Recursos no Azure PostgreSQL Flexible Server
+        if: ${{ github.event.inputs.db_type == 'azure-postgres' }}
+        shell: bash
+        run: |
+          set -e
+          RG="${{ github.event.inputs.resource_group || 'rg-qualisac-dicompel' }}"
+          LOCATION="${{ github.event.inputs.location || 'brazilsouth' }}"
+          SERVER="${{ github.event.inputs.server_name || 'pg-qualisac-dicompel' }}"
+          DB="${{ github.event.inputs.db_name || 'qualisac_db' }}"
+          ADMIN="${{ github.event.inputs.admin_user || 'qualisacadmin' }}"
+          PASSWORD="${{ github.event.inputs.admin_password || secrets.AZURE_DB_PASSWORD }}"
+
+          echo "::group::1. Criando Resource Group no Azure"
+          az group create --name "$RG" --location "$LOCATION"
+          echo "::endgroup::"
+
+          echo "::group::2. Criando Servidor Azure PostgreSQL Flexible Server"
+          if ! az postgres flexible-server show --name "$SERVER" --resource-group "$RG" &>/dev/null; then
+            az postgres flexible-server create \
+              --name "$SERVER" \
+              --resource-group "$RG" \
+              --location "$LOCATION" \
+              --admin-user "$ADMIN" \
+              --admin-password "$PASSWORD" \
+              --sku-name "Standard_B1ms" \
+              --tier "Burstable" \
+              --storage-size 32 \
+              --version 16 \
+              --yes
+            echo "Servidor PostgreSQL criado com sucesso!"
+          else
+            echo "Servidor PostgreSQL $SERVER já existe!"
+          fi
+          echo "::endgroup::"
+
+          echo "::group::3. Configurando Firewall do PostgreSQL"
+          az postgres flexible-server firewall-rule create \
+            --resource-group "$RG" \
+            --name "$SERVER" \
+            --rule-name "AllowAzureServices" \
+            --start-ip-address "0.0.0.0" \
+            --end-ip-address "0.0.0.0" || true
+
+          RUNNER_IP=$(curl -s https://api.ipify.org)
+          az postgres flexible-server firewall-rule create \
+            --resource-group "$RG" \
+            --name "$SERVER" \
+            --rule-name "AllowGitHubRunner" \
+            --start-ip-address "$RUNNER_IP" \
+            --end-ip-address "$RUNNER_IP" || true
+          echo "::endgroup::"
+
+          echo "::group::4. Criando Banco de Dados $DB no PostgreSQL"
+          az postgres flexible-server db create \
+            --resource-group "$RG" \
+            --server-name "$SERVER" \
+            --database-name "$DB" || true
+          echo "::endgroup::"
+
+          echo "::group::5. Executando Schema PostgreSQL (azure_setup.sql)"
+          sudo apt-get update && sudo apt-get install -y postgresql-client
+          PGPASSWORD="$PASSWORD" psql \
+            --host="${SERVER}.postgres.database.azure.com" \
+            --port=5432 \
+            --username="$ADMIN" \
+            --dbname="$DB" \
+            --file="./azure_setup.sql"
+          echo "Schema e dados iniciais aplicados com sucesso no PostgreSQL!"
+          echo "::endgroup::"
+
+      - name: Relatório e Resumo da Implantação
+        if: always()
+        shell: bash
+        run: |
+          SERVER="${{ github.event.inputs.server_name || 'sql-qualisac-dicompel' }}"
+          DB="${{ github.event.inputs.db_name || 'qualisac_db' }}"
+          ADMIN="${{ github.event.inputs.admin_user || 'qualisacadmin' }}"
+          TYPE="${{ github.event.inputs.db_type || 'azure-sql' }}"
+
+          cat << EOF >> $GITHUB_STEP_SUMMARY
+          # 🚀 Banco de Dados Criado com Sucesso no Azure!
+
+          | Item | Valor |
+          |---|---|
+          | **Tipo do Banco** | \`${TYPE}\` |
+          | **Servidor** | \`${SERVER}\` |
+          | **Banco de Dados** | \`${DB}\` |
+          | **Usuário Administrador** | \`${ADMIN}\` |
+          | **Admin Inicial Criado** | \`admin@dicompel.com.br\` |
+          | **Status da Execução** | ✅ Concluído via GitHub Actions |
+
+          ### 🔑 Como conectar na sua aplicação:
+          Adicione as seguintes variáveis no seu arquivo \`.env\` ou nas configurações de ambiente:
+
+          \`\`\`env
+          AZURE_DB_HOST="${SERVER}.database.windows.net"
+          AZURE_DB_USER="${ADMIN}"
+          AZURE_DB_NAME="${DB}"
+          AZURE_DB_PORT=1433
+          AZURE_DB_SSL=true
+          \`\`\`
+          EOF

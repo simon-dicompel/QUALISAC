@@ -262,7 +262,7 @@ export const SmtpConfigModal: React.FC<SmtpConfigModalProps> = ({ isOpen, onClos
               </div>
 
               {testResult && (
-                <div className={`p-3 rounded-lg border text-xs leading-relaxed ${
+                <div className={`p-3.5 rounded-xl border text-xs leading-relaxed space-y-3 ${
                   testResult.success
                     ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
                     : 'bg-rose-50 border-rose-200 text-rose-900'
@@ -275,7 +275,7 @@ export const SmtpConfigModal: React.FC<SmtpConfigModalProps> = ({ isOpen, onClos
                     )}
                     <div>
                       <strong className="block">{testResult.success ? 'Sucesso!' : 'Aviso do Servidor:'}</strong>
-                      <p className="mt-0.5">{testResult.message}</p>
+                      <p className="mt-0.5 font-mono text-[11px] bg-white/70 p-2 rounded border border-rose-200/60 text-rose-800">{testResult.message}</p>
                       {testResult.messageId && (
                         <p className="text-[10px] font-mono text-emerald-700 mt-1">
                           Message-ID: {testResult.messageId}
@@ -283,6 +283,30 @@ export const SmtpConfigModal: React.FC<SmtpConfigModalProps> = ({ isOpen, onClos
                       )}
                     </div>
                   </div>
+
+                  {/* Diagnóstico Automatizado de Erro 535 do Outlook / Office 365 */}
+                  {!testResult.success && (testResult.message.includes('535') || testResult.message.includes('Authentication unsuccessful') || testResult.message.includes('outlook.com')) && (
+                    <div className="p-3 bg-amber-50/90 border border-amber-300 rounded-lg text-amber-950 space-y-2">
+                      <div className="flex items-center gap-1.5 font-black text-xs uppercase text-amber-900">
+                        <ShieldCheck className="w-4 h-4 text-amber-600" />
+                        <span>Passo a Passo para Resolver o Erro 535 no Microsoft 365:</span>
+                      </div>
+                      <p className="text-[11px] text-amber-800">
+                        O Exchange Online bloqueia logins SMTP quando o <strong>SMTP Autenticado</strong> está desabilitado na conta ou quando há <strong>MFA (Duplo Fator)</strong> ativo:
+                      </p>
+                      <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-amber-900 pl-1 leading-snug">
+                        <li>
+                          <strong>Ativar SMTP Autenticado:</strong> No <a href="https://admin.microsoft.com" target="_blank" rel="noreferrer" className="underline font-bold text-blue-700">admin.microsoft.com</a>, acesse <em>Usuários &gt; Usuários Ativos &gt; sac@dicompel.com.br &gt; Email &gt; Gerenciar aplicativos de email</em> e marque <strong>SMTP Autenticado</strong>.
+                        </li>
+                        <li>
+                          <strong>Gerar Senha de Aplicativo (se tiver MFA):</strong> Se a conta tem autenticação em duas etapas, acesse <a href="https://mysignins.microsoft.com/security-info" target="_blank" rel="noreferrer" className="underline font-bold text-blue-700">mysignins.microsoft.com/security-info</a>, crie uma <strong>Senha do Aplicativo</strong> de 16 dígitos e use-a no seu <code>.env</code> em <code>SMTP_PASS</code>.
+                        </li>
+                        <li>
+                          <strong>Parâmetros .env:</strong> Use <code>SMTP_HOST="smtp.office365.com"</code>, <code>SMTP_PORT=587</code>, <code>SMTP_SECURE=false</code> e <code>SMTP_USER="sac@dicompel.com.br"</code>.
+                        </li>
+                      </ol>
+                    </div>
+                  )}
                 </div>
               )}
             </form>
