@@ -93,6 +93,22 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
   const [sqlModalContent, setSqlModalContent] = useState<string>('');
   const [isLoadingSql, setIsLoadingSql] = useState(false);
 
+  // States for editing AZURE_DB_HOST and testing connection
+  const [isEditingAzureHost, setIsEditingAzureHost] = useState(false);
+  const [azureFormHost, setAzureFormHost] = useState('');
+  const [azureFormPort, setAzureFormPort] = useState('1433');
+  const [azureFormUser, setAzureFormUser] = useState('qualisacadmin');
+  const [azureFormDb, setAzureFormDb] = useState('qualisac_db');
+  const [azureFormPassword, setAzureFormPassword] = useState('');
+  const [isSavingAzureConfig, setIsSavingAzureConfig] = useState(false);
+  const [isTestingAzureConn, setIsTestingAzureConn] = useState(false);
+  const [azureTestResult, setAzureTestResult] = useState<{
+    success: boolean;
+    message: string;
+    latencyMs?: number;
+  } | null>(null);
+  const [azureSaveSuccessMsg, setAzureSaveSuccessMsg] = useState<string | null>(null);
+
   const handleOpenSqlModal = async () => {
     setIsSqlModalOpen(true);
     if (!sqlModalContent) {
@@ -117,6 +133,12 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
       const res = await fetch('/api/azure/status');
       const data = await res.json();
       setAzureStatus(data);
+      if (data.host && data.host !== 'Não configurado (.env)') {
+        setAzureFormHost(data.host);
+      }
+      if (data.port) setAzureFormPort(data.port);
+      if (data.user && data.user !== 'Não configurado') setAzureFormUser(data.user);
+      if (data.database) setAzureFormDb(data.database);
     } catch {
       setAzureStatus({
         configured: false,
@@ -128,6 +150,65 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
       });
     } finally {
       setIsLoadingAzureStatus(false);
+    }
+  };
+
+  const handleSaveAzureConfig = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!azureFormHost.trim()) {
+      alert('Por favor informe o Host do Banco Azure (AZURE_DB_HOST).');
+      return;
+    }
+    setIsSavingAzureConfig(true);
+    setAzureSaveSuccessMsg(null);
+    try {
+      const res = await fetch('/api/azure/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          host: azureFormHost.trim(),
+          port: azureFormPort.trim() || '1433',
+          user: azureFormUser.trim() || 'qualisacadmin',
+          database: azureFormDb.trim() || 'qualisac_db',
+          password: azureFormPassword
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAzureSaveSuccessMsg(data.message || 'Configuração salva com sucesso!');
+        await fetchAzureStatus();
+        setTimeout(() => setAzureSaveSuccessMsg(null), 6000);
+      } else {
+        alert(data.error || 'Erro ao salvar configuração.');
+      }
+    } catch (err: any) {
+      alert('Falha ao comunicar com o servidor: ' + err.message);
+    } finally {
+      setIsSavingAzureConfig(false);
+    }
+  };
+
+  const handleTestAzureConnection = async () => {
+    setIsTestingAzureConn(true);
+    setAzureTestResult(null);
+    try {
+      const res = await fetch('/api/azure/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          host: azureFormHost.trim() || azureStatus?.host,
+          port: azureFormPort.trim() || azureStatus?.port || '1433'
+        })
+      });
+      const data = await res.json();
+      setAzureTestResult(data);
+    } catch (err: any) {
+      setAzureTestResult({
+        success: false,
+        message: 'Erro ao tentar conectar: ' + err.message
+      });
+    } finally {
+      setIsTestingAzureConn(false);
     }
   };
 
@@ -1276,6 +1357,16 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
 
                 <button
                   type="button"
+                  onClick={() => setIsEditingAzureHost(!isEditingAzureHost)}
+                  className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  title="Alterar AZURE_DB_HOST e configurações de conexão"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  <span>{isEditingAzureHost ? 'Fechar Painel de Edição' : 'Alterar AZURE_DB_HOST'}</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={fetchAzureStatus}
                   disabled={isLoadingAzureStatus}
                   className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl border border-white/20 transition-all flex items-center gap-1.5 cursor-pointer"
@@ -1290,8 +1381,8 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
             {/* Connection Info Strip */}
             <div className="mt-5 pt-4 border-t border-blue-700/50 grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
               <div>
-                <span className="text-[9.5px] uppercase font-bold text-blue-300/80 block">Host Azure SQL:</span>
-                <strong className="text-white truncate block">{azureStatus?.host || 'sql-qualisac-dicompel.database.windows.net'}</strong>
+                <span className="text-[9.5px] uppercase font-bold text-blue-300/80 block">Host Azure SQL (AZURE_DB_HOST):</span>
+                <strong className="text-amber-300 truncate block text-xs">{azureStatus?.host || 'sql-qualisac-dicompel.database.windows.net'}</strong>
               </div>
               <div>
                 <span className="text-[9.5px] uppercase font-bold text-blue-300/80 block">Banco de Dados:</span>
@@ -1305,10 +1396,194 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
                 <span className="text-[9.5px] uppercase font-bold text-blue-300/80 block">Porta / Status:</span>
                 <span className="text-emerald-400 font-bold flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Porta 1433 (T-SQL)</span>
+                  <span>Porta {azureStatus?.port || '1433'} (T-SQL)</span>
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* FORMULÁRIO DE ALTERAÇÃO DO AZURE_DB_HOST */}
+          <div className={`p-6 rounded-2xl border transition-all ${
+            isEditingAzureHost
+              ? 'bg-amber-50/70 border-amber-300 shadow-md ring-2 ring-amber-400/40'
+              : 'bg-white border-slate-200 card-shadow'
+          }`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-700">
+                  <Edit2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                    <span>Configuração do Host Azure SQL</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                      AZURE_DB_HOST
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Altere o endereço do servidor Azure SQL ou aponte para a sua instância personalizada.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleTestAzureConnection}
+                  disabled={isTestingAzureConn}
+                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Testar se o servidor responde na porta especificada"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isTestingAzureConn ? 'animate-spin text-blue-600' : 'text-slate-600'}`} />
+                  <span>{isTestingAzureConn ? 'Testando Conexão...' : 'Testar Conexão TCP'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Success Notification */}
+            {azureSaveSuccessMsg && (
+              <div className="mt-4 p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{azureSaveSuccessMsg}</span>
+              </div>
+            )}
+
+            {/* Test Connection Results */}
+            {azureTestResult && (
+              <div className={`mt-4 p-3.5 rounded-xl border text-xs animate-in fade-in ${
+                azureTestResult.success
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                  : 'bg-rose-50 border-rose-300 text-rose-900'
+              }`}>
+                <div className="flex items-start gap-2">
+                  {azureTestResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  )}
+                  <div className="space-y-1">
+                    <p className="font-bold">{azureTestResult.message}</p>
+                    {!azureTestResult.success && (
+                      <p className="text-[11px] text-rose-700 leading-relaxed">
+                        Dica: Certifique-se de que no Portal do Azure &gt; Servidor SQL &gt; <strong>Segurança &gt; Rede / Firewall</strong>, a opção <strong>"Permitir que serviços e recursos do Azure acessem este servidor"</strong> esteja marcada como <strong>SIM</strong>.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Inputs Form */}
+            <form onSubmit={handleSaveAzureConfig} className="mt-4 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                {/* AZURE_DB_HOST */}
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                    <span>Host do Servidor Azure SQL (AZURE_DB_HOST) *</span>
+                    <span className="text-[10px] text-slate-400 font-mono">Ex: sql-qualisac-dicompel.database.windows.net</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={azureFormHost}
+                      onChange={(e) => setAzureFormHost(e.target.value)}
+                      placeholder="sql-qualisac-dicompel.database.windows.net"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-mono text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-hidden transition-all shadow-2xs font-bold"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* AZURE_DB_PORT */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-800 block">
+                    Porta (AZURE_DB_PORT)
+                  </label>
+                  <input
+                    type="text"
+                    value={azureFormPort}
+                    onChange={(e) => setAzureFormPort(e.target.value)}
+                    placeholder="1433"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-mono text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-hidden transition-all shadow-2xs"
+                  />
+                </div>
+
+                {/* AZURE_DB_NAME */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-800 block">
+                    Nome do Banco (AZURE_DB_NAME)
+                  </label>
+                  <input
+                    type="text"
+                    value={azureFormDb}
+                    onChange={(e) => setAzureFormDb(e.target.value)}
+                    placeholder="qualisac_db"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-mono text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-hidden transition-all shadow-2xs"
+                  />
+                </div>
+
+                {/* AZURE_DB_USER */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-800 block">
+                    Usuário Admin (AZURE_DB_USER)
+                  </label>
+                  <input
+                    type="text"
+                    value={azureFormUser}
+                    onChange={(e) => setAzureFormUser(e.target.value)}
+                    placeholder="qualisacadmin"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-mono text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-hidden transition-all shadow-2xs"
+                  />
+                </div>
+
+                {/* AZURE_DB_PASSWORD */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-800 block">
+                    Senha (AZURE_DB_PASSWORD)
+                  </label>
+                  <input
+                    type="password"
+                    value={azureFormPassword}
+                    onChange={(e) => setAzureFormPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-mono text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-hidden transition-all shadow-2xs"
+                  />
+                </div>
+
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100">
+                <p className="text-[11px] text-slate-500">
+                  Ao salvar, o arquivo <code>.env</code> é atualizado automaticamente e as conexões passam a utilizar este novo host.
+                </p>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAzureFormHost('sql-qualisac-dicompel.database.windows.net');
+                      setAzureFormPort('1433');
+                      setAzureFormUser('qualisacadmin');
+                      setAzureFormDb('qualisac_db');
+                    }}
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                  >
+                    Restaurar Padrão Dicompel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={isSavingAzureConfig}
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{isSavingAzureConfig ? 'Salvando...' : 'Salvar Alteração do AZURE_DB_HOST'}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
 
           {/* Method Selector Tabs */}

@@ -2,10 +2,11 @@ import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
+import net from 'net';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 
-dotenv.config();
+dotenv.config({ override: true });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -150,9 +151,38 @@ ${body}
   }
 });
 
+// Helper to update variables in .env file
+function updateEnvVars(newVars: Record<string, string>) {
+  const envPath = path.resolve(__dirname, '.env');
+  let currentEnv = '';
+  if (fs.existsSync(envPath)) {
+    currentEnv = fs.readFileSync(envPath, 'utf-8');
+  }
+  
+  let lines = currentEnv ? currentEnv.split(/\r?\n/) : [];
+  for (const [key, val] of Object.entries(newVars)) {
+    process.env[key] = val;
+    let found = false;
+    lines = lines.map(line => {
+      if (line.trim().startsWith(`${key}=`)) {
+        found = true;
+        return `${key}="${val}"`;
+      }
+      return line;
+    });
+    if (!found) {
+      lines.push(`${key}="${val}"`);
+    }
+  }
+  fs.writeFileSync(envPath, lines.join('\n'));
+}
+
 // 3. Azure Database Status & Configuration Info
 app.get('/api/azure/status', (req, res) => {
-  const host = process.env.AZURE_DB_HOST || '';
+  let host = process.env.AZURE_DB_HOST || '';
+  if (host && !host.includes('.')) {
+    host = `${host}.database.windows.net`;
+  }
   const user = process.env.AZURE_DB_USER || '';
   const db = process.env.AZURE_DB_NAME || 'qualisac_db';
   const port = process.env.AZURE_DB_PORT || '1433';
@@ -169,7 +199,126 @@ app.get('/api/azure/status', (req, res) => {
     scriptFile: 'scripts/montar_banco_azure.sh',
     message: hasConfig
       ? `Configuração do Azure Database encontrada: ${host}`
-      : 'Banco de dados Azure ainda não configurado no .env local. Utilize o GitHub Actions ou os scripts prontos para criar no Azure!'
+      : 'Banco de dados Azure ainda não configurado no .env local. Utilize o formulário abaixo para definir o host!'
+  });
+});
+
+// Update Azure Database Configuration (AZURE_DB_HOST, etc.)
+app.post('/api/azure/config', (req, res) => {
+  try {
+    const { host, port, user, password, database } = req.body;
+    
+    if (!host || typeof host !== 'string' || !host.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'O parâmetro "host" (AZURE_DB_HOST) é obrigatório.'
+      });
+    }
+
+    let cleanHost = host.trim();
+    if (!cleanHost.includes('.')) {
+      cleanHost = `${cleanHost}.database.windows.net`;
+    }
+    const cleanPort = String(port || '1433').trim();
+    const cleanUser = String(user || 'qualisacadmin').trim();
+    const cleanDb = String(database || 'qualisac_db').trim();
+
+    const updates: Record<string, string> = {
+      AZURE_DB_HOST: cleanHost,
+      AZURE_DB_PORT: cleanPort,
+      AZURE_DB_USER: cleanUser,
+      AZURE_DB_NAME: cleanDb,
+      AZURE_DB_SSL: 'true'
+    };
+
+    if (password !== undefined && password !== null) {
+      updates.AZURE_DB_PASSWORD = String(password);
+    }
+
+    updateEnvVars(updates);
+
+    console.log(`[Azure DB] AZURE_DB_HOST atualizado para: ${cleanHost}:${cleanPort}`);
+
+    return res.json({
+      success: true,
+      message: `AZURE_DB_HOST atualizado com sucesso para "${cleanHost}".`,
+      config: {
+        host: cleanHost,
+        port: cleanPort,
+        user: cleanUser,
+        database: cleanDb
+      }
+    });
+  } catch (err: any) {
+    console.error('[Azure DB] Erro ao salvar configurações:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Falha ao salvar as configurações no servidor.'
+    });
+  }
+});
+
+// Test TCP connectivity to Azure DB Host
+app.post('/api/azure/test-connection', (req, res) => {
+  const targetHost = req.body?.host || process.env.AZURE_DB_HOST;
+  const targetPort = parseInt(req.body?.port || process.env.AZURE_DB_PORT || '1433', 10);
+
+  if (!targetHost || targetHost.includes('your-azure-db-host')) {
+    return res.status(400).json({
+      success: false,
+      error: 'Host inválido ou não configurado. Defina o AZURE_DB_HOST primeiro.'
+    });
+  }
+
+  const startTime = Date.now();
+  const socket = new net.Socket();
+  let finished = false;
+
+  const timer = setTimeout(() => {
+    if (!finished) {
+      finished = true;
+      socket.destroy();
+      return res.json({
+        success: false,
+        error: 'TIMEOUT',
+        message: `Tempo limite de conexão (5s) excedido para ${targetHost}:${targetPort}. Verifique se a regra de Firewall no Portal do Azure permite a conexão do IP da aplicação.`
+      });
+    }
+  }, 5000);
+
+  socket.connect(targetPort, targetHost, () => {
+    if (!finished) {
+      finished = true;
+      clearTimeout(timer);
+      const latencyMs = Date.now() - startTime;
+      socket.end();
+      return res.json({
+        success: true,
+        latencyMs,
+        message: `Conexão bem-sucedida! O servidor Azure SQL em ${targetHost}:${targetPort} está ativo e respondendo (${latencyMs}ms).`
+      });
+    }
+  });
+
+  socket.on('error', (err: any) => {
+    if (!finished) {
+      finished = true;
+      clearTimeout(timer);
+      socket.destroy();
+      let tip = '';
+      if (err.code === 'ENOTFOUND') {
+        tip = `O endereço DNS "${targetHost}" não foi localizado. Verifique a digitação do hostname.`;
+      } else if (err.code === 'ECONNREFUSED') {
+        tip = `A conexão na porta ${targetPort} foi recusada pelo servidor remoto. Verifique a porta do SQL (padrão: 1433).`;
+      } else {
+        tip = `Erro de rede: ${err.message}`;
+      }
+      return res.json({
+        success: false,
+        error: err.code || 'CONNECTION_ERROR',
+        message: tip
+      });
+    }
   });
 });
 
