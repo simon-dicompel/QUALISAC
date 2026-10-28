@@ -119,10 +119,10 @@ function getSqlConfig(): sql.config | null {
     password,
     port,
     options: {
-      encrypt: true, // Required for Azure SQL
-      trustServerCertificate: false,
-      connectTimeout: 7000,
-      requestTimeout: 10000
+      encrypt: process.env.AZURE_DB_SSL !== 'false', // Required for Azure SQL (true)
+      trustServerCertificate: process.env.AZURE_DB_TRUST_SERVER_CERT === 'true' || false,
+      connectTimeout: 10000,
+      requestTimeout: 15000
     },
     pool: {
       max: 10,
