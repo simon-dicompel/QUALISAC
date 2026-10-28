@@ -142,12 +142,12 @@ async function ensureAzureTables(p: sql.ConnectionPool) {
         CREATE TABLE dbo.Tenants (
           id VARCHAR(50) NOT NULL PRIMARY KEY,
           name NVARCHAR(150) NOT NULL,
-          plan VARCHAR(50) NOT NULL,
-          status VARCHAR(50) NOT NULL,
+          [plan] VARCHAR(50) NOT NULL,
+          [status] VARCHAR(50) NOT NULL,
           createdAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
           color VARCHAR(10) NULL
         );
-        INSERT INTO dbo.Tenants (id, name, plan, status, color)
+        INSERT INTO dbo.Tenants (id, name, [plan], [status], color)
         VALUES ('tenant_1', N'Dicompel Indústria e Comércio', 'Enterprise', 'Ativo', '#003355');
       END
     `);
@@ -160,11 +160,11 @@ async function ensureAzureTables(p: sql.ConnectionPool) {
           id VARCHAR(50) NOT NULL PRIMARY KEY,
           name NVARCHAR(150) NOT NULL,
           email NVARCHAR(150) NOT NULL UNIQUE,
-          role VARCHAR(50) NOT NULL,
+          [role] VARCHAR(50) NOT NULL,
           passwordHash VARCHAR(255) NULL,
           tenantId VARCHAR(50) NOT NULL
         );
-        INSERT INTO dbo.Users (id, name, email, role, passwordHash, tenantId)
+        INSERT INTO dbo.Users (id, name, email, [role], passwordHash, tenantId)
         VALUES ('user_dicompel_admin', N'Administrador Dicompel', 'admin@dicompel.com.br', 'ADMIN', 'Dicompel!@#2026', 'tenant_1');
       END
     `);
