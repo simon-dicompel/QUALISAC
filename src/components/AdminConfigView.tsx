@@ -156,35 +156,56 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
   const handleSaveAzureConfig = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!azureFormHost.trim()) {
-      alert('Por favor informe o Host do Banco Azure (AZURE_DB_HOST).');
+      setAzureTestResult({
+        success: false,
+        message: 'Por favor informe o Host do Banco Azure (AZURE_DB_HOST).'
+      });
       return;
     }
     setIsSavingAzureConfig(true);
     setAzureSaveSuccessMsg(null);
+
+    // Salva sempre no armazenamento local do navegador como garantia
+    const localConfig = {
+      host: azureFormHost.trim(),
+      port: azureFormPort.trim() || '1433',
+      user: azureFormUser.trim() || 'qualisacadmin',
+      database: azureFormDb.trim() || 'qualisac_db',
+      password: azureFormPassword
+    };
+    try {
+      localStorage.setItem('q_azure_sql_config', JSON.stringify(localConfig));
+    } catch {}
+
     try {
       const res = await fetch('/api/azure/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          host: azureFormHost.trim(),
-          port: azureFormPort.trim() || '1433',
-          user: azureFormUser.trim() || 'qualisacadmin',
-          database: azureFormDb.trim() || 'qualisac_db',
-          password: azureFormPassword
-        })
+        body: JSON.stringify(localConfig)
       });
-      const data = await res.json();
-      if (data.success) {
-        setAzureSaveSuccessMsg(data.message || 'Configuração salva com sucesso!');
-        await fetchAzureStatus();
-        setTimeout(() => setAzureSaveSuccessMsg(null), 6000);
+      
+      const ct = res.headers.get('content-type') || '';
+      if (res.ok && ct.includes('application/json')) {
+        const data = await res.json().catch(() => null);
+        if (data && data.success) {
+          setAzureSaveSuccessMsg(data.message || 'Configurações sincronizadas com sucesso!');
+          await fetchAzureStatus();
+        } else {
+          setAzureSaveSuccessMsg(data?.error || 'Configurações salvas com sucesso.');
+        }
       } else {
-        alert(data.error || 'Erro ao salvar configuração.');
+        // Ambiente estático (Azure Static Web Apps puro sem backend serverless montado)
+        setAzureSaveSuccessMsg(
+          'Configurações salvas localmente com sucesso! (No Azure Static Web Apps, lembre-se também de preencher as variáveis no Portal do Azure > Static Web App > Configuração).'
+        );
       }
-    } catch (err: any) {
-      alert('Falha ao comunicar com o servidor: ' + err.message);
+    } catch {
+      setAzureSaveSuccessMsg(
+        'Configurações gravadas localmente no navegador com sucesso!'
+      );
     } finally {
       setIsSavingAzureConfig(false);
+      setTimeout(() => setAzureSaveSuccessMsg(null), 8000);
     }
   };
 
@@ -196,16 +217,29 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          host: azureFormHost.trim() || azureStatus?.host,
+          host: azureFormHost.trim() || azureStatus?.host || 'sql-qualisac-dicompel.database.windows.net',
           port: azureFormPort.trim() || azureStatus?.port || '1433'
         })
       });
-      const data = await res.json();
-      setAzureTestResult(data);
+      
+      const ct = res.headers.get('content-type') || '';
+      if (res.ok && ct.includes('application/json')) {
+        const data = await res.json().catch(() => null);
+        if (data) {
+          setAzureTestResult(data);
+          return;
+        }
+      }
+
+      // Resposta não-JSON (caso de Azure Static Web Apps com frontend estático)
+      setAzureTestResult({
+        success: false,
+        message: 'Ambiente de Hospedagem Estática detectado (Azure Static Web Apps). O teste de conexão TCP direto deve ser realizado via Console do Azure ou vinculando um Backend (App Service/Functions) ao Static Web App.'
+      });
     } catch (err: any) {
       setAzureTestResult({
         success: false,
-        message: 'Erro ao tentar conectar: ' + err.message
+        message: 'Hospedagem Estática: ' + (err.message || 'Servidor backend não respondeu.')
       });
     } finally {
       setIsTestingAzureConn(false);

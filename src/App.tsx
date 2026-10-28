@@ -182,9 +182,14 @@ export default function App() {
 
     // 2. Carrega todos os dados gravados no servidor / Azure SQL
     fetch('/api/data')
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) return null;
+        return res.json().catch(() => null);
+      })
       .then((data) => {
-        if (data.success) {
+        if (data && data.success) {
           if (Array.isArray(data.tickets)) {
             const cleanTickets = data.tickets.filter((t: any) => 
               !t.id?.startsWith('SAC-0001') && 

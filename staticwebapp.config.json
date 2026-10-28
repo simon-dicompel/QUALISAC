@@ -1,15 +1,13 @@
 {
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/assets/*", "/public/*", "/*.{png,jpg,jpeg,gif,svg,ico,json,css,js}"]
-  },
-  "responseOverrides": {
-    "404": {
-      "rewrite": "/index.html",
-      "statusCode": 200
-    }
+    "exclude": ["/api/*", "/assets/*", "/public/*", "/*.{png,jpg,jpeg,gif,svg,ico,json,css,js}"]
   },
   "routes": [
+    {
+      "route": "/api/*",
+      "allowedRoles": ["anonymous", "authenticated"]
+    },
     {
       "route": "/*",
       "allowedRoles": ["anonymous", "authenticated"]
