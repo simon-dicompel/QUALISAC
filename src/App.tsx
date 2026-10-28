@@ -81,7 +81,7 @@ export default function App() {
     }
   }, []);
 
-  // --- 1. Persistent Database Engine (LocalStorage powered) ---
+  // --- 1. Persistent Database Engine (Dual-layer: Server/Azure SQL + LocalStorage) ---
   const [tenants, setTenants] = useState<Tenant[]>(() => {
     const saved = localStorage.getItem('q_tenants');
     return saved ? JSON.parse(saved) : INITIAL_TENANTS;
@@ -97,10 +97,19 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Rejeita chamados de amostra residuais para manter a base limpa
+          const clean = parsed.filter((t: any) => 
+            !t.id?.startsWith('SAC-0001') && 
+            !t.id?.startsWith('DEV-0001') &&
+            t.customerName !== 'Construtora Horizonte Ltda' &&
+            t.productCode !== 'SIM-19011'
+          );
+          return clean;
+        }
       } catch (e) {}
     }
-    return INITIAL_TICKETS;
+    return [];
   });
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -128,8 +137,83 @@ export default function App() {
 
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem('q_products');
-    return saved !== null ? JSON.parse(saved) : INITIAL_PRODUCTS;
+    if (saved !== null) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Rejeita produtos de amostra residuais para manter a base limpa
+          const clean = parsed.filter((p: any) => 
+            p.code !== 'SIM-19011' && 
+            p.code !== 'SIM-19022' && 
+            p.code !== 'SIM-20033' &&
+            p.code !== 'DIC-1001'
+          );
+          return clean;
+        }
+      } catch (e) {}
+    }
+    return [];
   });
+
+  const [dbStatus, setDbStatus] = useState<{
+    connected: boolean;
+    type: 'azure-sql' | 'local-persisted';
+    host: string;
+    database: string;
+    message: string;
+  }>({
+    connected: false,
+    type: 'local-persisted',
+    host: 'sql-qualisac-dicompel.database.windows.net',
+    database: 'qualisac_db',
+    message: 'Carregando status do banco...'
+  });
+
+  // Efeito de sincronização com o banco de dados no carregamento da aplicação
+  useEffect(() => {
+    // 1. Limpeza garantida de dados de exemplo em navegadores que tinham cache antigo
+    const isWipedV4 = localStorage.getItem('q_prod_dicompel_clean_v4');
+    if (!isWipedV4) {
+      localStorage.removeItem('q_tickets');
+      localStorage.removeItem('q_products');
+      localStorage.setItem('q_prod_dicompel_clean_v4', 'true');
+      fetch('/api/database/wipe-samples', { method: 'POST' }).catch(() => {});
+    }
+
+    // 2. Carrega todos os dados gravados no servidor / Azure SQL
+    fetch('/api/data')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          if (Array.isArray(data.tickets)) {
+            const cleanTickets = data.tickets.filter((t: any) => 
+              !t.id?.startsWith('SAC-0001') && 
+              !t.id?.startsWith('DEV-0001') &&
+              t.customerName !== 'Construtora Horizonte Ltda' &&
+              t.productCode !== 'SIM-19011'
+            );
+            setTickets(cleanTickets);
+            localStorage.setItem('q_tickets', JSON.stringify(cleanTickets));
+          }
+          if (Array.isArray(data.products)) {
+            const cleanProducts = data.products.filter((p: any) => 
+              p.code !== 'SIM-19011' && 
+              p.code !== 'SIM-19022' && 
+              p.code !== 'SIM-20033' &&
+              p.code !== 'DIC-1001'
+            );
+            setProducts(cleanProducts);
+            localStorage.setItem('q_products', JSON.stringify(cleanProducts));
+          }
+          if (data.dbStatus) {
+            setDbStatus(data.dbStatus);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('[Sync] Falha ao sincronizar dados do servidor:', err);
+      });
+  }, []);
 
   const [issueTypes, setIssueTypes] = useState<IssueTypeCategory[]>(() => {
     const saved = localStorage.getItem('q_issueTypes');
@@ -562,6 +646,13 @@ export default function App() {
 
     setTickets((prev) => [newTicket, ...prev]);
 
+    // Persiste imediatamente no banco de dados (Azure SQL + Backup em Disco)
+    fetch('/api/tickets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newTicket),
+    }).catch((err) => console.error('[API] Erro ao sincronizar abertura de chamado no banco:', err));
+
     // Dispara e-mail automático para o cliente e observadores sobre a abertura do chamado
     sendAutomatedTicketEmail(
       newTicket,
@@ -574,6 +665,15 @@ export default function App() {
     setIsNewTicketModalOpen(false);
     setSelectedTicketId(newId); // open it immediately
     setActiveMenu('chamados');
+  };
+
+  // Helper centralizado para persistência de atualizações de chamados na API/Banco
+  const persistTicketUpdate = (updatedTicket: Ticket) => {
+    fetch(`/api/tickets/${updatedTicket.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedTicket),
+    }).catch((err) => console.error(`[API] Erro ao sincronizar chamado ${updatedTicket.id} no banco:`, err));
   };
 
   // D. Update Status & Log Action + Dispara E-mails Automáticos
@@ -610,12 +710,14 @@ export default function App() {
             timestamp,
           };
           
-          return {
+          const updated = {
             ...t,
             status: newStatus,
             updatedAt: timestamp,
             history: [...t.history, newHist],
           };
+          persistTicketUpdate(updated);
+          return updated;
         }
         return t;
       })
@@ -661,13 +763,15 @@ export default function App() {
             timestamp,
           };
 
-          return {
+          const updated = {
             ...t,
             reminders,
             status: nextStatus,
             updatedAt: timestamp,
             history: [...t.history, newHist],
           };
+          persistTicketUpdate(updated);
+          return updated;
         }
         return t;
       })
@@ -721,13 +825,15 @@ export default function App() {
             timestamp,
           };
 
-          return {
+          const updated = {
             ...t,
             status: nextStatus,
             comments: [...t.comments, newComm],
             updatedAt: timestamp,
             history: [...t.history, newHist],
           };
+          persistTicketUpdate(updated);
+          return updated;
         }
         return t;
       })
@@ -777,13 +883,15 @@ export default function App() {
             timestamp,
           };
 
-          return {
+          const updated = {
             ...t,
             qualityReport: report,
             status: nextStatus,
             updatedAt: timestamp,
             history: [...t.history, newHist],
           };
+          persistTicketUpdate(updated);
+          return updated;
         }
         return t;
       })
@@ -834,13 +942,15 @@ export default function App() {
             timestamp,
           };
 
-          return {
+          const updated = {
             ...t,
             status: nextStatus,
             files: [...t.files, newFile],
             updatedAt: timestamp,
             history: [...t.history, newHist],
           };
+          persistTicketUpdate(updated);
+          return updated;
         }
         return t;
       })
@@ -866,13 +976,15 @@ export default function App() {
             timestamp,
           };
 
-          return {
+          const updated = {
             ...t,
             observers: updatedObservers,
             observerEmail: observerEmail || (updatedObservers.length > 0 ? updatedObservers[0] : undefined),
             updatedAt: timestamp,
             history: [...t.history, newHist],
           };
+          persistTicketUpdate(updated);
+          return updated;
         }
         return t;
       })
@@ -883,26 +995,47 @@ export default function App() {
   const handleDeleteTicket = (ticketId: string) => {
     if (!currentUser) return;
     if (currentUser.role !== 'ADMIN') {
-      alert('Permissão Negada: Apenas administradores podem apagar chamados (deletar do sistema).');
       return;
     }
     setTickets((prev) => prev.filter((t) => t.id !== ticketId));
     setSelectedTicketId(null);
+    fetch(`/api/tickets/${ticketId}`, { method: 'DELETE' }).catch((err) =>
+      console.error(`[API] Erro ao excluir chamado ${ticketId} no banco:`, err)
+    );
   };
 
   // F. Product mutation handlers (Admin only)
   const handleAddProduct = (product: Product) => {
     setProducts((prev) => [...prev, product]);
+    fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(product),
+    }).catch((err) => console.error('[API] Erro ao cadastrar produto no banco:', err));
   };
 
   const handleEditProduct = (code: string, updatedName: string, updatedProducedQty?: number, updatedLine?: string) => {
+    const updatedProd: Product = {
+      code,
+      name: updatedName,
+      producedQty: updatedProducedQty,
+      line: updatedLine || 'Geral',
+    };
     setProducts((prev) =>
-      prev.map((p) => (p.code === code ? { ...p, name: updatedName, producedQty: updatedProducedQty, line: updatedLine } : p))
+      prev.map((p) => (p.code === code ? { ...p, ...updatedProd } : p))
     );
+    fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedProd),
+    }).catch((err) => console.error('[API] Erro ao atualizar produto no banco:', err));
   };
 
   const handleDeleteProduct = (code: string) => {
     setProducts((prev) => prev.filter((p) => p.code !== code));
+    fetch(`/api/products/${code}`, { method: 'DELETE' }).catch((err) =>
+      console.error(`[API] Erro ao excluir produto ${code} no banco:`, err)
+    );
   };
 
   // G. Issue Type mutation handlers (Admin only)
@@ -1043,9 +1176,6 @@ export default function App() {
   };
 
   const handleWipeDatabaseForSimulation = () => {
-    const confirmation = confirm('Deseja limpar todos os chamados e todos os produtos do sistema para iniciar o simulado do zero?');
-    if (!confirmation) return;
-
     // Update states
     setTickets([]);
     setProducts([]);
@@ -1058,7 +1188,10 @@ export default function App() {
     localStorage.setItem('q_products', JSON.stringify([]));
     localStorage.setItem('q_systemEmailLogs', JSON.stringify([]));
 
-    alert('Sistema limpo com sucesso! Todos os chamados e produtos foram apagados. Agora você pode cadastrá-los um a um para simular o fluxo completo.');
+    // Limpa a base no servidor e no Azure SQL
+    fetch('/api/database/wipe-samples', { method: 'POST' }).catch((err) =>
+      console.error('[API] Erro ao limpar base no servidor:', err)
+    );
   };
 
   // Retrieve single ticket for detailed view
@@ -1192,6 +1325,28 @@ export default function App() {
               </button>
             )}
           </div>
+        </div>
+
+        {/* Indicador de Status do Banco de Dados */}
+        <div className="hidden lg:flex items-center">
+          {dbStatus.connected && dbStatus.type === 'azure-sql' ? (
+            <div 
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold shadow-2xs"
+              title={`Conexão direta ativa no Azure SQL Server: ${dbStatus.host} (${dbStatus.database})`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Azure SQL Conectado</span>
+            </div>
+          ) : (
+            <button
+              onClick={() => setActiveMenu('admin-config')}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[11px] font-bold transition-all cursor-pointer shadow-2xs"
+              title={`Armazenamento Seguro em Disco Ativo. Clique para configurar a senha do Azure SQL (${dbStatus.host})`}
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+              <span>Banco Seguro Local (Configurar Azure)</span>
+            </button>
+          )}
         </div>
 
         {/* Profile info & out */}

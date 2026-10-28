@@ -5,6 +5,17 @@ import fs from 'fs';
 import net from 'net';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
+import {
+  connectAzureSql,
+  getDatabaseStatus,
+  getAllTickets,
+  saveTicket,
+  deleteTicket,
+  getAllProducts,
+  saveProduct,
+  deleteProduct,
+  wipeSampleData
+} from './src/server/database.js';
 
 dotenv.config({ override: true });
 
@@ -13,6 +24,11 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+
+// Initialize Azure SQL Connection on startup
+connectAzureSql().catch(err => {
+  console.warn('[Server] Falha inicial ao conectar no Azure SQL (operando em modo local persistente):', err.message);
+});
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -186,10 +202,10 @@ app.get('/api/azure/status', (req, res) => {
   const user = process.env.AZURE_DB_USER || '';
   const db = process.env.AZURE_DB_NAME || 'qualisac_db';
   const port = process.env.AZURE_DB_PORT || '1433';
-  const hasConfig = Boolean(host && user);
+  const dbStatus = getDatabaseStatus();
 
   res.json({
-    configured: hasConfig,
+    configured: dbStatus.connected,
     host: host || 'Não configurado (.env)',
     user: user || 'Não configurado',
     database: db,
@@ -197,14 +213,13 @@ app.get('/api/azure/status', (req, res) => {
     workflowFile: '.github/workflows/deploy-azure-database.yml',
     sqlFile: 'azure_sql_setup.sql',
     scriptFile: 'scripts/montar_banco_azure.sh',
-    message: hasConfig
-      ? `Configuração do Azure Database encontrada: ${host}`
-      : 'Banco de dados Azure ainda não configurado no .env local. Utilize o formulário abaixo para definir o host!'
+    dbStatus,
+    message: dbStatus.message
   });
 });
 
 // Update Azure Database Configuration (AZURE_DB_HOST, etc.)
-app.post('/api/azure/config', (req, res) => {
+app.post('/api/azure/config', async (req, res) => {
   try {
     const { host, port, user, password, database } = req.body;
     
@@ -239,15 +254,22 @@ app.post('/api/azure/config', (req, res) => {
 
     console.log(`[Azure DB] AZURE_DB_HOST atualizado para: ${cleanHost}:${cleanPort}`);
 
+    // Try connecting immediately with the new credentials
+    await connectAzureSql();
+    const dbStatus = getDatabaseStatus();
+
     return res.json({
       success: true,
-      message: `AZURE_DB_HOST atualizado com sucesso para "${cleanHost}".`,
+      message: dbStatus.connected
+        ? `AZURE_DB_HOST atualizado e CONECTADO ao Azure SQL Server (${cleanHost})!`
+        : `AZURE_DB_HOST atualizado para "${cleanHost}". ${dbStatus.message}`,
       config: {
         host: cleanHost,
         port: cleanPort,
         user: cleanUser,
         database: cleanDb
-      }
+      },
+      dbStatus
     });
   } catch (err: any) {
     console.error('[Azure DB] Erro ao salvar configurações:', err);
@@ -255,6 +277,110 @@ app.post('/api/azure/config', (req, res) => {
       success: false,
       error: err.message || 'Falha ao salvar as configurações no servidor.'
     });
+  }
+});
+
+// Full Database Payload (Tickets & Products)
+app.get('/api/data', async (req, res) => {
+  try {
+    const [tickets, products] = await Promise.all([
+      getAllTickets(),
+      getAllProducts()
+    ]);
+    const dbStatus = getDatabaseStatus();
+    res.json({
+      success: true,
+      tickets,
+      products,
+      dbStatus
+    });
+  } catch (err: any) {
+    console.error('[API] Erro ao carregar dados:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Tickets REST API
+app.get('/api/tickets', async (req, res) => {
+  try {
+    const tickets = await getAllTickets();
+    res.json({ success: true, tickets });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/tickets', async (req, res) => {
+  try {
+    const ticket = await saveTicket(req.body);
+    res.json({ success: true, ticket });
+  } catch (err: any) {
+    console.error('[API] Erro ao salvar chamado:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.put('/api/tickets/:id', async (req, res) => {
+  try {
+    const ticket = await saveTicket({ ...req.body, id: req.params.id });
+    res.json({ success: true, ticket });
+  } catch (err: any) {
+    console.error('[API] Erro ao atualizar chamado:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/tickets/:id', async (req, res) => {
+  try {
+    await deleteTicket(req.params.id);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[API] Erro ao excluir chamado:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Products REST API
+app.get('/api/products', async (req, res) => {
+  try {
+    const products = await getAllProducts();
+    res.json({ success: true, products });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/products', async (req, res) => {
+  try {
+    const product = await saveProduct(req.body);
+    res.json({ success: true, product });
+  } catch (err: any) {
+    console.error('[API] Erro ao salvar produto:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/products/:code', async (req, res) => {
+  try {
+    await deleteProduct(req.params.code);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[API] Erro ao excluir produto:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Wipe Samples Endpoint
+app.post('/api/database/wipe-samples', async (req, res) => {
+  try {
+    const result = await wipeSampleData();
+    res.json({
+      success: true,
+      message: 'Base limpa com sucesso para início de produção.',
+      result
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

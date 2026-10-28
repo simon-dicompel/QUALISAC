@@ -213,31 +213,15 @@ CREATE INDEX IX_TicketFiles_TicketId ON dbo.TicketFiles(ticketId);
 -- 4. CARGA DE DADOS INICIAIS (SEED DATA)
 -- ==========================================
 
--- Seed: Tenants
+-- Seed: Tenants (Dicompel Matriz)
 INSERT INTO dbo.Tenants (id, name, plan, status, createdAt, color) VALUES
-('tenant_1', N'Alimentos Estrela S/A', 'Enterprise', 'Ativo', '2025-01-15T10:00:00Z', '#0284c7'),
-('tenant_2', N'Metalúrgica Progresso', 'Growth', 'Ativo', '2025-03-10T12:00:00Z', '#16a34a'),
-('tenant_3', N'Logística Expressa Ltda.', 'Trial', 'A vencer', '2026-05-20T08:00:00Z', '#ea580c');
+('tenant_1', N'Dicompel Indústria e Comércio', 'Enterprise', 'Ativo', '2025-01-15T10:00:00Z', '#003355');
 
--- Seed: Users
+-- Seed: Usuário Administrador Principal
 INSERT INTO dbo.Users (id, name, email, role, passwordHash, tenantId) VALUES
-('user_dicompel_admin', N'Administrador Dicompel', 'admin@dicompel.com.br', 'ADMIN', 'Dicompel!@#2026', 'tenant_1'),
-('user_admin', N'Carlos Silva', 'admin@quali.com', 'ADMIN', 'admin', 'tenant_1'),
-('user_sac', N'Juliana Souza', 'sac@quali.com', 'SAC', 'sac', 'tenant_1'),
-('user_qualidade', N'Marcos Oliveira', 'qualidade@quali.com', 'QUALIDADE', 'quali', 'tenant_1'),
-('user_comum', N'Rodrigo Costa', 'comum@quali.com', 'COMUM', 'comum', 'tenant_1'),
-('user_metal_admin', N'Roberto Ferro', 'roberto@progresso.com', 'ADMIN', 'roberto', 'tenant_2'),
-('user_metal_qual', N'Aline Metal', 'aline@progresso.com', 'QUALIDADE', 'aline', 'tenant_2');
+('user_dicompel_admin', N'Administrador Dicompel', 'admin@dicompel.com.br', 'ADMIN', 'Dicompel!@#2026', 'tenant_1');
 
--- Seed: Products
-INSERT INTO dbo.Products (code, name, producedQty, line) VALUES
-('PROD-A310', N'Leite Condensado Estrela 395g', 50000, N'Lácteos'),
-('PROD-B550', N'Biscoito Amanteigado Ninho 150g', 30000, N'Biscoitos'),
-('PROD-A102', N'Molho de Tomate Premium Sachê 340g', 100000, N'Molhos'),
-('PROD-C991', N'Suco de Uva Integral Orgânico 1L', 15000, N'Bebidas'),
-('PROD-M88', N'Chapa Metálica Galvanizada 2mm', 2500, N'Chapas');
-
--- Seed: IssueCategories
+-- Seed: Categorias ISO 9001
 INSERT INTO dbo.IssueCategories (id, name) VALUES
 ('it_defeito', N'Defeito'),
 ('it_avaria', N'Avaria'),
@@ -245,7 +229,7 @@ INSERT INTO dbo.IssueCategories (id, name) VALUES
 ('it_logistica', N'Erro de Logística'),
 ('it_outro', N'Outro');
 
--- Seed: IssueSubcategories
+-- Seed: Subcategorias ISO 9001
 INSERT INTO dbo.IssueSubcategories (categoryId, name) VALUES
 ('it_defeito', N'Riscado'),
 ('it_defeito', N'Amassado'),
@@ -268,78 +252,8 @@ INSERT INTO dbo.IssueSubcategories (categoryId, name) VALUES
 ('it_outro', N'Reclamação geral'),
 ('it_outro', N'Dúvida técnica');
 
--- Seed: Tickets
-INSERT INTO dbo.Tickets (id, tenantId, productCode, productName, batch, clientName, issueType, subCategory, quantity, description, status, createdAt, updatedAt, userId, userName) VALUES
-('TK-1001', 'tenant_1', 'PROD-A310', N'Leite Condensado Estrela 395g', 'L-240822A', N'Supermercados Pão e Trigo Ltda', N'Defeito', N'Mau funcionamento', 120, N'Cliente reclama que 120 latas de leite condensado vieram com a solda lateral danificada, ocasionando vazamentos em cerca de 40 unidades e estufamento nas demais.', 'Finalizado', '2026-05-15T09:30:00Z', '2026-05-18T16:00:00Z', 'user_sac', N'Juliana Souza'),
-('TK-1002', 'tenant_1', 'PROD-B550', N'Biscoito Amanteigado Ninho 150g', 'L-120925C', N'Atacadão Alvorada Distribuição', N'Avaria', N'Embalagem Danificada', 450, N'Caixas master de papelão amassadas e rasgadas durante o descarregamento na doca 4. Suspeita-se que houve empilhamento excessivo no transporte.', 'Em analise', '2026-06-02T14:20:00Z', '2026-06-03T09:10:00Z', 'user_sac', N'Juliana Souza'),
-('TK-1003', 'tenant_1', 'PROD-A102', N'Molho de Tomate Premium Sachê 340g', 'L-291125X', N'Carrefour Comércio do Brasil', N'Troca', N'Erro comercial de pedido', 80, N'Molhos de tomate faturados incorretamente. O cliente comprou Molho com Manjericão, mas recebeu Molho Tradicional nas caixas externas etiquetadas erradas.', 'Aberto', '2026-06-09T17:45:00Z', '2026-06-09T17:45:00Z', 'user_sac', N'Juliana Souza'),
-('TK-1004', 'tenant_1', 'PROD-C991', N'Suco de Uva Integral Orgânico 1L', 'L-040226B', N'Grupo Zaffari S/A', N'Defeito', N'Trincado', 250, N'Presença acentuada de sedimentos (borras/tartaratos) no fundo das garrafas, muito superior ao aceitável. O cliente se recusa a expor o lote nas gôndolas e solicita devolução imediata por não conformidade visual.', 'Em tratativa', '2026-05-20T10:00:00Z', '2026-05-24T11:20:00Z', 'user_sac', N'Juliana Souza'),
-('TK-2001', 'tenant_2', 'PROD-M88', N'Chapa Metálica Galvanizada 2mm', 'LT-MET-001', N'Indústria Metalúrgica Sul', N'Defeito', N'Padrão fora de medida', 15, N'Chapas chegaram com empenamento longitudinal excessivo de até 8mm, impossibilitando a alimentação automática na máquina de corte laser.', 'Aberto', '2026-06-08T11:00:00Z', '2026-06-08T11:00:00Z', 'user_metal_qual', N'Aline Metal');
-
--- Seed: TicketFiles
-INSERT INTO dbo.TicketFiles (id, ticketId, name, size, type, url) VALUES
-('file_1', 'TK-1001', N'foto_lote_vazado.png', '1.2 MB', 'image/png', 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400'),
-('file_2', 'TK-1001', N'laudo_temperatura.pdf', '350 KB', 'application/pdf', '#'),
-('file_3', 'TK-1002', N'paletes_esmagados.jpg', '2.1 MB', 'image/jpeg', 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=400'),
-('file_4', 'TK-1004', N'garrafas_sedimento_fundo.png', '1.8 MB', 'image/png', 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&q=80&w=400');
-
--- Seed: TicketComments
-INSERT INTO dbo.TicketComments (id, ticketId, userId, userName, userRole, text, createdAt) VALUES
-('c_1', 'TK-1001', 'user_qualidade', N'Marcos Oliveira', 'QUALIDADE', N'Amostras de retenção do lote L-240822A foram recolhidas para análise físico-química preventiva na fábrica.', '2026-05-16T11:00:00Z'),
-('c_2', 'TK-1001', 'user_sac', N'Juliana Souza', 'SAC', N'Ótimo, o cliente aguarda o posicionamento para realizar o descarte adequado do material.', '2026-05-16T14:15:00Z'),
-('c_3', 'TK-1002', 'user_sac', N'Juliana Souza', 'SAC', N'Motorista assinou ressalva na nota fiscal de entrada apontando tombamento parcial na curva.', '2026-06-02T14:30:00Z'),
-('c_4', 'TK-1004', 'user_qualidade', N'Marcos Oliveira', 'QUALIDADE', N'Análise laboratorial conformou precipitação natural de bitartarato de potássio decorrente de choque térmico acelerado no resfriamento pós-pasteurização.', '2026-05-22T14:00:00Z');
-
--- Seed: QualityReports (Análise de Causa Raiz e 5 Porquês)
-INSERT INTO dbo.QualityReports (ticketId, rootCause, fiveWhys, correctiveAction, preventiveAction, responsible, targetDate, updatedAt) VALUES
-('TK-1001', 
- N'Falha de calibração do eletrodo de soldagem da lata na Linha 3 de envase.', 
- N'["Por que as latas vazaram? Porque a solda lateral abriu.","Por que a solda lateral abriu? Porque houve falta de aquecimento localizado durante o fechamento.","Por que houve falta de aquecimento? Porque o eletrodo de solda operou abaixo da temperatura requerida.","Por que a temperatura estava abaixo? Porque o sensor não corrigiu a resistência após flutuação térmica.","Por que o sensor falhou? Porque o plano de calibração preventiva venceu há 15 dias sem execução."]', 
- N'Calibração imediata do equipamento de soldagem. Replanejamento das manutenções preventivas semanais com tolerância zero para atrasos.', 
- N'Configurar alerta automatizado no supervisório industrial para parar a esteira caso a calibração de solda decline >5% do limiar de segurança.', 
- N'Marcos Oliveira / Eng. de Produção', 
- '2026-05-25', 
- '2026-05-17T15:30:00Z'),
-('TK-1004', 
- N'Resfriamento brusco do mosto de uva estabilizado sob temperatura -4°C por falha operacional na autoclave de choque térmico.', 
- N'["Por que as garrafas criaram sedimentos visuais excessivos? Porque ocorreu precipitação ácida acelerada de tartaratos.","Por que precipitou açúcar e sal de tartrato? Porque o produto sofreu resfriamento demasiadamente brusco.","Por que o resfriamento foi brusco? Porque a válvula de refrigeração permaneceu 100% aberta por tempo excessivo.","Por que a válvula ficou aberta? Porque o sensor automático travou aberto com indicação emperrada.","Por que travou aberto? Porque houve ausência de manutenção preventiva nas eletroválvulas de água gelada."]', 
- N'Trocar o kit de solenoides da válvula reguladora de refrigeração e ajustar o padrão de lavagem térmica periódica.', 
- N'Auditoria de lote de estabilização a frio em cada tanque de maturação de uva antes do envase comercial.', 
- N'Marcos Oliveira / Química do Envase', 
- '2026-06-15', 
- '2026-05-23T16:00:00Z');
-
--- Seed: TicketDefects
-INSERT INTO dbo.TicketDefects (id, ticketId, description, quantity) VALUES
-('def_1_1', 'TK-1001', N'solda lateral danificada / vazamento', 40),
-('def_1_2', 'TK-1001', N'estufamento microbiano residual', 50),
-('def_1_3', 'TK-1001', N'amassado por transporte', 30),
-('def_2_1', 'TK-1002', N'papelão master amassado', 300),
-('def_2_2', 'TK-1002', N'pacote de biscoito rasgado/vazado', 150),
-('def_3_1', 'TK-1003', N'erro de etiquetagem de sabor (manjericão por tradicional)', 80),
-('def_4_1', 'TK-1004', N'sedimentos (borras de tartaratos) visíveis', 200),
-('def_4_2', 'TK-1004', N'garrafa de vidro trincada/esmigalhada', 50),
-('def_5_1', 'TK-2001', N'empenamento longitudinal excessivo', 10),
-('def_5_2', 'TK-2001', N'risco profundo na galvanização protetora', 5);
-
--- Seed: HistorySteps
-INSERT INTO dbo.HistorySteps (id, ticketId, action, userId, userName, userRole, details, timestamp) VALUES
-('h_1', 'TK-1001', N'Abertura do Chamado', 'user_sac', N'Juliana Souza', 'SAC', N'Chamado cadastrado inicialmente com 120 latas afetadas.', '2026-05-15T09:30:00Z'),
-('h_2', 'TK-1001', N'Mudar Status para: Em analise', 'user_qualidade', N'Marcos Oliveira', 'QUALIDADE', N'Análise de laboratório iniciada.', '2026-05-16T10:00:00Z'),
-('h_3', 'TK-1001', N'Adicionar Comentário', 'user_qualidade', N'Marcos Oliveira', 'QUALIDADE', NULL, '2026-05-16T11:00:00Z'),
-('h_4', 'TK-1001', N'Salvar Relatório de Qualidade', 'user_qualidade', N'Marcos Oliveira', 'QUALIDADE', N'Identificada causa raiz e definidos os 5 porquês.', '2026-05-17T15:30:00Z'),
-('h_5', 'TK-1001', N'Mudar Status para: Resolvido', 'user_qualidade', N'Marcos Oliveira', 'QUALIDADE', N'Plano de ação corretiva inserido e validado com a gerência industrial.', '2026-05-17T15:45:00Z'),
-('h_6', 'TK-1001', N'Finalização do Chamado', 'user_admin', N'Carlos Silva', 'ADMIN', N'Crédito de devolução emitido ao financeiro do cliente. Chamado encerrado.', '2026-05-18T16:00:00Z'),
-('h_7', 'TK-1002', N'Abertura do Chamado', 'user_sac', N'Juliana Souza', 'SAC', N'Abertura com comprovação de avaria por transporte.', '2026-06-02T14:20:00Z'),
-('h_8', 'TK-1002', N'Mudar Status para: Em analise', 'user_qualidade', N'Marcos Oliveira', 'QUALIDADE', N'Análise de responsabilidade logística em andamento.', '2026-06-03T09:10:00Z'),
-('h_9', 'TK-1003', N'Abertura do Chamado', 'user_sac', N'Juliana Souza', 'SAC', N'Registro inicial de troca física por erro de expedição/etiqueta.', '2026-06-09T17:45:00Z'),
-('h_10', 'TK-1004', N'Abertura do Chamado', 'user_sac', N'Juliana Souza', 'SAC', N'SAC cadastra solicitação de análise sobre acúmulo de borra.', '2026-05-20T10:00:00Z'),
-('h_11', 'TK-1004', N'Mudar Status para: Em analise', 'user_qualidade', N'Marcos Oliveira', 'QUALIDADE', N'Amostras de teste de sedimentação enviadas à microquímica.', '2026-05-21T09:00:00Z'),
-('h_12', 'TK-1004', N'Salvar Relatório de Qualidade', 'user_qualidade', N'Marcos Oliveira', 'QUALIDADE', N'Causa raiz descrita como falha de solenoide na refrigeração.', '2026-05-23T16:00:00Z'),
-('h_13', 'TK-1004', N'Mudar Status para: Em tratativa', 'user_qualidade', N'Marcos Oliveira', 'QUALIDADE', N'Contatada transportadora e equipe logística para agendamento da coleta de devolução física.', '2026-05-24T11:20:00Z'),
-('h_m1', 'TK-2001', N'Abertura do Chamado', 'user_metal_qual', N'Aline Metal', 'QUALIDADE', N'Abertura de teste do cliente Metalurgica.', '2026-06-08T11:00:00Z');
-
--- Confirmação e commit da transação
+-- Confirmação e commit da transação (Banco de Dados Limpo para Produção)
 COMMIT TRANSACTION;
-PRINT 'Script executado com sucesso! Banco de dados QualiSAC inicializado no Azure SQL.';
+PRINT 'Script executado com sucesso! Banco de dados QualiSAC inicializado limpo para produção no Azure SQL.';
 GO
+

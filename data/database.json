@@ -1,0 +1,16 @@
+{
+  "tickets": [],
+  "products": [],
+  "users": [
+    {
+      "id": "user_dicompel_admin",
+      "name": "Administrador Dicompel",
+      "email": "admin@dicompel.com.br",
+      "role": "ADMIN",
+      "passwordHash": "Dicompel!@#2026",
+      "tenantId": "tenant_1"
+    }
+  ],
+  "issueTypes": [],
+  "updatedAt": "2026-10-28T10:45:49.788Z"
+}
