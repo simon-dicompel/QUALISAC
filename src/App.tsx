@@ -210,6 +210,10 @@ export default function App() {
             setProducts(cleanProducts);
             localStorage.setItem('q_products', JSON.stringify(cleanProducts));
           }
+          if (Array.isArray(data.users) && data.users.length > 0) {
+            setUsers(data.users);
+            localStorage.setItem('q_users', JSON.stringify(data.users));
+          }
           if (data.dbStatus) {
             setDbStatus(data.dbStatus);
           }
@@ -499,7 +503,8 @@ export default function App() {
       }),
     })
       .then(async (res) => {
-        const data = await res.json();
+        const data = await res.json().catch(() => null);
+        if (!data) return;
         setSystemEmailLogs((prev) =>
           prev.map((l) => {
             if (l.id === emailLog.id) {
@@ -1082,10 +1087,18 @@ export default function App() {
   // H. User mutation handlers (Admin only)
   const handleAddUser = (user: User) => {
     setUsers((prev) => [...prev, user]);
+    fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(user),
+    }).catch((err) => console.error('[API] Erro ao cadastrar usuário no banco:', err));
   };
 
   const handleDeleteUser = (userId: string) => {
     setUsers((prev) => prev.filter((u) => u.id !== userId));
+    fetch(`/api/users/${userId}`, { method: 'DELETE' }).catch((err) =>
+      console.error(`[API] Erro ao excluir usuário ${userId} no banco:`, err)
+    );
   };
 
   // H. Clear all cached data to start fresh simulation

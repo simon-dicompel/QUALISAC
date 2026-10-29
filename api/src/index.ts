@@ -1,32 +1,39 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
 import sql from 'mssql';
-import nodemailer from 'nodemailer';
+import net from 'net';
+
+// Dynamic runtime configuration cache (populated from env and can be updated via /api/azure/config)
+let activeConfig = {
+  host: process.env.AZURE_DB_HOST || 'sql-qualisac-dicompel.database.windows.net',
+  port: parseInt(process.env.AZURE_DB_PORT || '1433', 10),
+  database: process.env.AZURE_DB_NAME || 'qualisac_db',
+  user: process.env.AZURE_DB_USER || 'qualisacadmin',
+  password: process.env.AZURE_DB_PASSWORD || '',
+  ssl: process.env.AZURE_DB_SSL !== 'false'
+};
 
 // Azure SQL Connection Pool Cache
 let pool: sql.ConnectionPool | null = null;
+let isConnecting = false;
 
-function getSqlConfig(): sql.config | null {
-  const host = process.env.AZURE_DB_HOST || 'sql-qualisac-dicompel.database.windows.net';
-  const server = host.includes('.') ? host : `${host}.database.windows.net`;
-  const database = process.env.AZURE_DB_NAME || 'qualisac_db';
-  const user = process.env.AZURE_DB_USER || 'qualisacadmin';
-  const password = process.env.AZURE_DB_PASSWORD || '';
-  const port = parseInt(process.env.AZURE_DB_PORT || '1433', 10);
+function buildSqlConfig(custom?: Partial<typeof activeConfig>): sql.config | null {
+  const cfg = { ...activeConfig, ...custom };
+  const host = cfg.host.includes('.') ? cfg.host : `${cfg.host}.database.windows.net`;
 
-  if (!password || password.trim() === '') {
+  if (!cfg.password || cfg.password.trim() === '') {
     return null;
   }
 
   return {
-    server,
-    database,
-    user,
-    password,
-    port,
+    server: host,
+    database: cfg.database,
+    user: cfg.user,
+    password: cfg.password,
+    port: cfg.port,
     options: {
-      encrypt: process.env.AZURE_DB_SSL !== 'false',
+      encrypt: cfg.ssl,
       trustServerCertificate: process.env.AZURE_DB_TRUST_SERVER_CERT === 'true' || false,
-      connectTimeout: 10000,
+      connectTimeout: 8000,
       requestTimeout: 15000,
     },
     pool: {
@@ -38,26 +45,56 @@ function getSqlConfig(): sql.config | null {
 }
 
 async function getPool(): Promise<sql.ConnectionPool | null> {
-  const config = getSqlConfig();
+  const config = buildSqlConfig();
   if (!config) return null;
 
   try {
     if (pool && pool.connected) {
       return pool;
     }
+    if (isConnecting) {
+      return pool;
+    }
+    isConnecting = true;
     pool = await new sql.ConnectionPool(config).connect();
+    isConnecting = false;
     return pool;
   } catch (err: any) {
+    isConnecting = false;
     console.error('[Azure Functions] Erro ao conectar no Azure SQL:', err.message);
     return null;
   }
 }
 
-// In-Memory fallback storage for serverless execution
+// In-Memory resilient fallback storage for serverless execution
 let memoryTickets: any[] = [];
 let memoryProducts: any[] = [];
+let memoryUsers: any[] = [
+  {
+    id: 'user_dicompel_admin',
+    name: 'Administrador Dicompel',
+    email: 'admin@dicompel.com.br',
+    role: 'ADMIN',
+    passwordHash: 'Dicompel!@#2026',
+    tenantId: 'tenant_1'
+  }
+];
 
-// 1. GET /api/data
+// Helper: JSON response with standard headers
+function jsonResponse(body: any, status = 200): HttpResponseInit {
+  return {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store'
+    },
+    jsonBody: body
+  };
+}
+
+// =========================================================================
+// 1. GET /api/data - Full Initial Payload
+// =========================================================================
 app.http('data', {
   methods: ['GET'],
   authLevel: 'anonymous',
@@ -66,9 +103,11 @@ app.http('data', {
       const p = await getPool();
       let tickets = memoryTickets;
       let products = memoryProducts;
+      let users = memoryUsers;
 
       if (p && p.connected) {
         try {
+          // Tickets
           const tRes = await p.request().query('SELECT id, payload FROM dbo.Tickets ORDER BY createdAt DESC');
           const loadedTickets: any[] = [];
           for (const row of tRes.recordset) {
@@ -80,51 +119,69 @@ app.http('data', {
               }
             }
           }
-          tickets = loadedTickets;
+          if (loadedTickets.length > 0) {
+            tickets = loadedTickets;
+            memoryTickets = loadedTickets;
+          }
 
+          // Products
           const pRes = await p.request().query('SELECT code, name, producedQty, line FROM dbo.Products ORDER BY code ASC');
-          products = pRes.recordset.map((r: any) => ({
+          const loadedProducts = pRes.recordset.map((r: any) => ({
             code: r.code,
             name: r.name,
             producedQty: r.producedQty || 0,
             line: r.line || 'Geral'
           }));
+          if (loadedProducts.length > 0) {
+            products = loadedProducts;
+            memoryProducts = loadedProducts;
+          }
+
+          // Users
+          const uRes = await p.request().query('SELECT id, name, email, [role], passwordHash, tenantId FROM dbo.Users ORDER BY name ASC');
+          const loadedUsers = uRes.recordset.map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            email: r.email,
+            role: r.role,
+            passwordHash: r.passwordHash,
+            tenantId: r.tenantId
+          }));
+          if (loadedUsers.length > 0) {
+            users = loadedUsers;
+            memoryUsers = loadedUsers;
+          }
         } catch (dbErr: any) {
-          context.warn('[Data] Erro ao ler tabelas no Azure SQL:', dbErr.message);
+          context.error('[Azure Functions] Erro ao carregar dados do Azure SQL:', dbErr.message);
         }
       }
 
-      const host = process.env.AZURE_DB_HOST || 'sql-qualisac-dicompel.database.windows.net';
-      return {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        jsonBody: {
-          success: true,
-          tickets,
-          products,
-          dbStatus: {
-            connected: Boolean(p && p.connected),
-            type: p && p.connected ? 'azure-sql' : 'local-persisted',
-            host,
-            database: process.env.AZURE_DB_NAME || 'qualisac_db',
-            user: process.env.AZURE_DB_USER || 'qualisacadmin',
-            message: p && p.connected
-              ? `Conectado ao Azure SQL (${host})`
-              : 'Executando em modo Serverless resiliente.'
-          }
+      return jsonResponse({
+        success: true,
+        tickets,
+        products,
+        users,
+        dbStatus: {
+          connected: Boolean(p && p.connected),
+          type: p && p.connected ? 'azure-sql' : 'local-persisted',
+          host: activeConfig.host,
+          database: activeConfig.database,
+          user: activeConfig.user,
+          port: activeConfig.port,
+          message: p && p.connected
+            ? `Conectado ao Azure SQL (${activeConfig.host})!`
+            : 'Sistema operando com persistência resiliente. Preencha AZURE_DB_PASSWORD no Azure Portal para sincronização direta.'
         }
-      };
+      });
     } catch (err: any) {
-      return {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-        jsonBody: { success: false, error: err.message }
-      };
+      return jsonResponse({ success: false, error: err.message }, 500);
     }
   }
 });
 
+// =========================================================================
 // 2. GET & POST /api/tickets
+// =========================================================================
 app.http('tickets', {
   methods: ['GET', 'POST'],
   authLevel: 'anonymous',
@@ -134,7 +191,6 @@ app.http('tickets', {
         const ticket: any = await req.json();
         const p = await getPool();
 
-        // Salva na memória
         const idx = memoryTickets.findIndex((t) => t.id === ticket.id);
         if (idx >= 0) memoryTickets[idx] = ticket;
         else memoryTickets.unshift(ticket);
@@ -169,34 +225,23 @@ app.http('tickets', {
               END
             `);
           } catch (err: any) {
-            context.error('[Tickets] Erro ao gravar ticket no Azure SQL:', err.message);
+            context.error('[Tickets POST] Erro no Azure SQL:', err.message);
           }
         }
 
-        return {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-          jsonBody: { success: true, ticket }
-        };
+        return jsonResponse({ success: true, ticket });
       } catch (err: any) {
-        return {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-          jsonBody: { success: false, error: err.message }
-        };
+        return jsonResponse({ success: false, error: err.message }, 500);
       }
     }
 
-    // GET
-    return {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      jsonBody: { success: true, tickets: memoryTickets }
-    };
+    return jsonResponse({ success: true, tickets: memoryTickets });
   }
 });
 
+// =========================================================================
 // 3. PUT & DELETE /api/tickets/{id}
+// =========================================================================
 app.http('tickets-id', {
   methods: ['PUT', 'DELETE'],
   route: 'tickets/{id}',
@@ -216,11 +261,7 @@ app.http('tickets-id', {
           context.error('[Tickets DELETE] Erro no Azure SQL:', err.message);
         }
       }
-      return {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        jsonBody: { success: true }
-      };
+      return jsonResponse({ success: true });
     }
 
     // PUT
@@ -248,22 +289,16 @@ app.http('tickets-id', {
         }
       }
 
-      return {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        jsonBody: { success: true, ticket }
-      };
+      return jsonResponse({ success: true, ticket });
     } catch (err: any) {
-      return {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-        jsonBody: { success: false, error: err.message }
-      };
+      return jsonResponse({ success: false, error: err.message }, 500);
     }
   }
 });
 
+// =========================================================================
 // 4. GET & POST /api/products
+// =========================================================================
 app.http('products', {
   methods: ['GET', 'POST'],
   authLevel: 'anonymous',
@@ -301,29 +336,19 @@ app.http('products', {
           }
         }
 
-        return {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-          jsonBody: { success: true, product }
-        };
+        return jsonResponse({ success: true, product });
       } catch (err: any) {
-        return {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-          jsonBody: { success: false, error: err.message }
-        };
+        return jsonResponse({ success: false, error: err.message }, 500);
       }
     }
 
-    return {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      jsonBody: { success: true, products: memoryProducts }
-    };
+    return jsonResponse({ success: true, products: memoryProducts });
   }
 });
 
+// =========================================================================
 // 5. DELETE /api/products/{code}
+// =========================================================================
 app.http('products-code', {
   methods: ['DELETE'],
   route: 'products/{code}',
@@ -343,71 +368,312 @@ app.http('products-code', {
       }
     }
 
-    return {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      jsonBody: { success: true }
-    };
+    return jsonResponse({ success: true });
   }
 });
 
-// 6. GET /api/azure/status
+// =========================================================================
+// 6. GET & POST /api/users
+// =========================================================================
+app.http('users', {
+  methods: ['GET', 'POST'],
+  authLevel: 'anonymous',
+  handler: async (req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+    if (req.method === 'POST') {
+      try {
+        const user: any = await req.json();
+        const idx = memoryUsers.findIndex((u) => u.id === user.id || u.email === user.email);
+        if (idx >= 0) memoryUsers[idx] = user;
+        else memoryUsers.push(user);
+
+        const p = await getPool();
+        if (p && p.connected) {
+          try {
+            const r = p.request();
+            r.input('id', sql.VarChar(50), user.id);
+            r.input('name', sql.NVarChar(150), user.name);
+            r.input('email', sql.NVarChar(150), user.email);
+            r.input('role', sql.VarChar(50), user.role || 'COMUM');
+            r.input('passwordHash', sql.VarChar(255), user.passwordHash || 'Dicompel!@#2026');
+            r.input('tenantId', sql.VarChar(50), user.tenantId || 'tenant_1');
+
+            await r.query(`
+              IF EXISTS (SELECT 1 FROM dbo.Users WHERE id = @id OR email = @email)
+              BEGIN
+                UPDATE dbo.Users
+                SET name = @name, email = @email, [role] = @role, passwordHash = @passwordHash, tenantId = @tenantId
+                WHERE id = @id OR email = @email;
+              END
+              ELSE
+              BEGIN
+                INSERT INTO dbo.Users (id, name, email, [role], passwordHash, tenantId)
+                VALUES (@id, @name, @email, @role, @passwordHash, @tenantId);
+              END
+            `);
+          } catch (err: any) {
+            context.error('[Users POST] Erro no Azure SQL:', err.message);
+          }
+        }
+
+        return jsonResponse({ success: true, user });
+      } catch (err: any) {
+        return jsonResponse({ success: false, error: err.message }, 500);
+      }
+    }
+
+    return jsonResponse({ success: true, users: memoryUsers });
+  }
+});
+
+// =========================================================================
+// 7. DELETE /api/users/{id}
+// =========================================================================
+app.http('users-id', {
+  methods: ['DELETE'],
+  route: 'users/{id}',
+  authLevel: 'anonymous',
+  handler: async (req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+    const id = req.params.id;
+    memoryUsers = memoryUsers.filter((u) => u.id !== id);
+
+    const p = await getPool();
+    if (p && p.connected) {
+      try {
+        const r = p.request();
+        r.input('id', sql.VarChar(50), id);
+        await r.query('DELETE FROM dbo.Users WHERE id = @id');
+      } catch (err: any) {
+        context.error('[Users DELETE] Erro no Azure SQL:', err.message);
+      }
+    }
+
+    return jsonResponse({ success: true });
+  }
+});
+
+// =========================================================================
+// 8. GET /api/azure/status
+// =========================================================================
 app.http('azure-status', {
   methods: ['GET'],
   route: 'azure/status',
   authLevel: 'anonymous',
   handler: async (req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
-    const host = process.env.AZURE_DB_HOST || 'sql-qualisac-dicompel.database.windows.net';
     const p = await getPool();
+    const isConn = Boolean(p && p.connected);
 
-    return {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      jsonBody: {
-        configured: Boolean(p && p.connected),
-        host,
-        user: process.env.AZURE_DB_USER || 'qualisacadmin',
-        database: process.env.AZURE_DB_NAME || 'qualisac_db',
-        port: process.env.AZURE_DB_PORT || '1433',
-        message: p && p.connected
-          ? `Conectado ao Azure SQL Server (${host})!`
-          : 'Aguardando credenciais no Azure Application Settings.'
-      }
-    };
+    return jsonResponse({
+      configured: isConn,
+      host: activeConfig.host,
+      user: activeConfig.user,
+      database: activeConfig.database,
+      port: String(activeConfig.port),
+      workflowFile: '.github/workflows/azure-static-web-apps-gentle-stone-05081080f.yml',
+      sqlFile: 'azure_sql_setup.sql',
+      message: isConn
+        ? `Conectado ao Azure SQL Server (${activeConfig.host})!`
+        : 'Aguardando credenciais no Azure Portal > Variáveis de ambiente (AZURE_DB_PASSWORD).'
+    });
   }
 });
 
-// 7. POST /api/azure/test-connection
+// =========================================================================
+// 9. POST /api/azure/config - Save configuration dynamically in session
+// =========================================================================
+app.http('azure-config', {
+  methods: ['POST'],
+  route: 'azure/config',
+  authLevel: 'anonymous',
+  handler: async (req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+    try {
+      const body: any = await req.json();
+      if (body.host) activeConfig.host = String(body.host).trim();
+      if (body.port) activeConfig.port = parseInt(String(body.port).trim(), 10) || 1433;
+      if (body.user) activeConfig.user = String(body.user).trim();
+      if (body.database) activeConfig.database = String(body.database).trim();
+      if (body.password !== undefined) activeConfig.password = String(body.password);
+
+      // Reconnect pool with new credentials
+      if (pool) {
+        try { await pool.close(); } catch {}
+        pool = null;
+      }
+
+      const p = await getPool();
+      const connected = Boolean(p && p.connected);
+
+      return jsonResponse({
+        success: true,
+        connected,
+        message: connected
+          ? `Configurações aplicadas com sucesso e CONECTADO ao Azure SQL Server (${activeConfig.host})!`
+          : `Configurações atualizadas na sessão. Para torná-las permanentes após reinicializações, adicione AZURE_DB_PASSWORD nas Variáveis de Ambiente do Static Web App no Portal Azure.`,
+        config: {
+          host: activeConfig.host,
+          port: String(activeConfig.port),
+          user: activeConfig.user,
+          database: activeConfig.database
+        }
+      });
+    } catch (err: any) {
+      return jsonResponse({ success: false, error: err.message }, 500);
+    }
+  }
+});
+
+// =========================================================================
+// 10. POST /api/azure/test-connection
+// =========================================================================
 app.http('azure-test-connection', {
   methods: ['POST'],
   route: 'azure/test-connection',
   authLevel: 'anonymous',
   handler: async (req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
-    const p = await getPool();
-    if (p && p.connected) {
-      return {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        jsonBody: {
-          success: true,
-          message: 'Conexão bem sucedida com o banco de dados Azure SQL!',
-          host: process.env.AZURE_DB_HOST || 'sql-qualisac-dicompel.database.windows.net'
-        }
-      };
-    }
+    try {
+      let reqBody: any = {};
+      try {
+        reqBody = await req.json();
+      } catch {}
 
-    return {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      jsonBody: {
-        success: false,
-        message: 'A senha do Azure SQL (AZURE_DB_PASSWORD) precisa ser definida no Portal do Azure > Static Web App > Configuração.'
+      const host = reqBody.host || activeConfig.host;
+      const port = parseInt(reqBody.port || String(activeConfig.port), 10);
+
+      // TCP Socket test
+      const tcpResult = await new Promise<{ ok: boolean; latencyMs: number; error?: string }>((resolve) => {
+        const start = Date.now();
+        const socket = new net.Socket();
+        socket.setTimeout(4000);
+
+        socket.on('connect', () => {
+          const latencyMs = Date.now() - start;
+          socket.destroy();
+          resolve({ ok: true, latencyMs });
+        });
+
+        socket.on('timeout', () => {
+          socket.destroy();
+          resolve({ ok: false, latencyMs: 4000, error: 'TIMEOUT: Conexão expirou após 4s. Verifique o Firewall do Azure SQL.' });
+        });
+
+        socket.on('error', (err) => {
+          socket.destroy();
+          resolve({ ok: false, latencyMs: Date.now() - start, error: err.message });
+        });
+
+        socket.connect(port, host);
+      });
+
+      if (!tcpResult.ok) {
+        return jsonResponse({
+          success: false,
+          error: tcpResult.error,
+          message: `Falha na conexão TCP com ${host}:${port}. ${tcpResult.error}`
+        });
       }
-    };
+
+      // Check SQL connection
+      const p = await getPool();
+      if (p && p.connected) {
+        return jsonResponse({
+          success: true,
+          latencyMs: tcpResult.latencyMs,
+          message: `Conexão bem-sucedida! O servidor Azure SQL em ${host}:${port} está ativo e autenticado (${tcpResult.latencyMs}ms).`
+        });
+      }
+
+      return jsonResponse({
+        success: true,
+        latencyMs: tcpResult.latencyMs,
+        message: `Porta TCP 1433 acessível em ${host} (${tcpResult.latencyMs}ms). A senha precisa ser preenchida no Portal do Azure > Variáveis de ambiente.`
+      });
+    } catch (err: any) {
+      return jsonResponse({ success: false, error: err.message }, 500);
+    }
   }
 });
 
-// 8. POST /api/database/wipe-samples
+// =========================================================================
+// 11. GET /api/azure/sql-content - Provide SQL script directly
+// =========================================================================
+const SQL_SCRIPT = `-- =========================================================================
+-- SCRIPT DE CRIAÇÃO DO BANCO DE DADOS OFICIAL - QUALISAC SIMON DICOMPEL
+-- EXECUTE NO AZURE PORTAL > BANCO qualisac_db > EDITOR DE CONSULTAS
+-- =========================================================================
+
+IF OBJECT_ID('dbo.Tenants', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.Tenants (
+    id VARCHAR(50) NOT NULL PRIMARY KEY,
+    name NVARCHAR(150) NOT NULL,
+    [plan] VARCHAR(50) NOT NULL,
+    [status] VARCHAR(50) NOT NULL,
+    createdAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    color VARCHAR(10) NULL
+  );
+  INSERT INTO dbo.Tenants (id, name, [plan], [status], color)
+  VALUES ('tenant_1', N'Dicompel Indústria e Comércio', 'Enterprise', 'Ativo', '#003355');
+END;
+
+IF OBJECT_ID('dbo.Users', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.Users (
+    id VARCHAR(50) NOT NULL PRIMARY KEY,
+    name NVARCHAR(150) NOT NULL,
+    email NVARCHAR(150) NOT NULL UNIQUE,
+    [role] VARCHAR(50) NOT NULL,
+    passwordHash VARCHAR(255) NULL,
+    tenantId VARCHAR(50) NOT NULL
+  );
+  INSERT INTO dbo.Users (id, name, email, [role], passwordHash, tenantId)
+  VALUES ('user_dicompel_admin', N'Administrador Dicompel', 'admin@dicompel.com.br', 'ADMIN', 'Dicompel!@#2026', 'tenant_1');
+END;
+
+IF OBJECT_ID('dbo.Products', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.Products (
+    code VARCHAR(50) NOT NULL PRIMARY KEY,
+    name NVARCHAR(200) NOT NULL,
+    producedQty INT NOT NULL DEFAULT 0,
+    line NVARCHAR(100) NOT NULL DEFAULT N'Geral',
+    createdAt DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+  );
+END;
+
+IF OBJECT_ID('dbo.Tickets', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.Tickets (
+    id VARCHAR(50) NOT NULL PRIMARY KEY,
+    tenantId VARCHAR(50) NOT NULL,
+    productCode VARCHAR(50) NULL,
+    productName NVARCHAR(200) NULL,
+    clientName NVARCHAR(150) NULL,
+    issueType NVARCHAR(100) NULL,
+    subCategory NVARCHAR(100) NULL,
+    quantity INT NOT NULL DEFAULT 1,
+    status VARCHAR(50) NOT NULL DEFAULT 'Aberto',
+    createdAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    updatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    payload NVARCHAR(MAX) NULL
+  );
+END;
+`;
+
+app.http('azure-sql-content', {
+  methods: ['GET'],
+  route: 'azure/sql-content',
+  authLevel: 'anonymous',
+  handler: async (req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+    return jsonResponse({
+      success: true,
+      filename: 'azure_sql_setup.sql',
+      content: SQL_SCRIPT
+    });
+  }
+});
+
+// =========================================================================
+// 12. POST /api/database/wipe-samples
+// =========================================================================
 app.http('database-wipe-samples', {
   methods: ['POST'],
   route: 'database/wipe-samples',
@@ -425,13 +691,9 @@ app.http('database-wipe-samples', {
       }
     }
 
-    return {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      jsonBody: {
-        success: true,
-        message: 'Base limpa com sucesso para início de produção.'
-      }
-    };
+    return jsonResponse({
+      success: true,
+      message: 'Base limpa com sucesso para início de produção.'
+    });
   }
 });

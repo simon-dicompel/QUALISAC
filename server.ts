@@ -14,6 +14,9 @@ import {
   getAllProducts,
   saveProduct,
   deleteProduct,
+  getAllUsers,
+  saveUser,
+  deleteUser,
   wipeSampleData
 } from './src/server/database.js';
 
@@ -280,18 +283,20 @@ app.post('/api/azure/config', async (req, res) => {
   }
 });
 
-// Full Database Payload (Tickets & Products)
+// Full Database Payload (Tickets, Products & Users)
 app.get('/api/data', async (req, res) => {
   try {
-    const [tickets, products] = await Promise.all([
+    const [tickets, products, users] = await Promise.all([
       getAllTickets(),
-      getAllProducts()
+      getAllProducts(),
+      getAllUsers()
     ]);
     const dbStatus = getDatabaseStatus();
     res.json({
       success: true,
       tickets,
       products,
+      users,
       dbStatus
     });
   } catch (err: any) {
@@ -366,6 +371,36 @@ app.delete('/api/products/:code', async (req, res) => {
     res.json({ success: true });
   } catch (err: any) {
     console.error('[API] Erro ao excluir produto:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Users REST API
+app.get('/api/users', async (req, res) => {
+  try {
+    const users = await getAllUsers();
+    res.json({ success: true, users });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/users', async (req, res) => {
+  try {
+    const user = await saveUser(req.body);
+    res.json({ success: true, user });
+  } catch (err: any) {
+    console.error('[API] Erro ao salvar usuário:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    await deleteUser(req.params.id);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[API] Erro ao excluir usuário:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });

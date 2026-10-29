@@ -115,9 +115,12 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
       setIsLoadingSql(true);
       try {
         const res = await fetch('/api/azure/sql-content');
-        const data = await res.json();
-        if (data.success && data.content) {
-          setSqlModalContent(data.content);
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data && data.success && data.content) {
+            setSqlModalContent(data.content);
+            return;
+          }
         }
       } catch (err) {
         console.error('Falha ao carregar SQL:', err);
@@ -131,22 +134,28 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
     setIsLoadingAzureStatus(true);
     try {
       const res = await fetch('/api/azure/status');
-      const data = await res.json();
-      setAzureStatus(data);
-      if (data.host && data.host !== 'Não configurado (.env)') {
-        setAzureFormHost(data.host);
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data) {
+          setAzureStatus(data);
+          if (data.host && data.host !== 'Não configurado (.env)') {
+            setAzureFormHost(data.host);
+          }
+          if (data.port) setAzureFormPort(data.port);
+          if (data.user && data.user !== 'Não configurado') setAzureFormUser(data.user);
+          if (data.database) setAzureFormDb(data.database);
+          return;
+        }
       }
-      if (data.port) setAzureFormPort(data.port);
-      if (data.user && data.user !== 'Não configurado') setAzureFormUser(data.user);
-      if (data.database) setAzureFormDb(data.database);
+      throw new Error('Endpoint indisponível');
     } catch {
       setAzureStatus({
         configured: false,
-        host: 'Não configurado (.env)',
-        user: 'Não configurado',
+        host: 'sql-qualisac-dicompel.database.windows.net',
+        user: 'qualisacadmin',
         database: 'qualisac_db',
         port: '1433',
-        message: 'Endpoint /api/azure/status indisponível'
+        message: 'Aguardando credenciais no Azure Portal > Variáveis de ambiente'
       });
     } finally {
       setIsLoadingAzureStatus(false);

@@ -29,8 +29,14 @@ export const SmtpConfigModal: React.FC<SmtpConfigModalProps> = ({ isOpen, onClos
     setIsLoadingStatus(true);
     try {
       const res = await fetch('/api/smtp/status');
-      const data = await res.json();
-      setSmtpStatus(data);
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data) {
+          setSmtpStatus(data);
+          return;
+        }
+      }
+      throw new Error('Falha ao consultar status SMTP');
     } catch (err) {
       setSmtpStatus({
         configured: false,
@@ -71,9 +77,9 @@ export const SmtpConfigModal: React.FC<SmtpConfigModalProps> = ({ isOpen, onClos
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
 
-      if (data.success) {
+      if (data && data.success) {
         setTestResult({
           success: true,
           message: data.message || `E-mail de teste enviado com sucesso para ${testEmail}!`,
@@ -82,7 +88,7 @@ export const SmtpConfigModal: React.FC<SmtpConfigModalProps> = ({ isOpen, onClos
       } else {
         setTestResult({
           success: false,
-          message: data.message || data.error || 'Falha ao autenticar ou enviar via SMTP.',
+          message: data?.message || data?.error || 'Falha ao autenticar ou enviar via SMTP.',
         });
       }
     } catch (err: any) {

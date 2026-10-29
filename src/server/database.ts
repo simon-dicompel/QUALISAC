@@ -466,3 +466,77 @@ export async function wipeSampleData(): Promise<{ ticketsWiped: number; products
 
   return { ticketsWiped: countTickets, productsWiped: countProducts };
 }
+
+// --- USERS CRUD ---
+export async function getAllUsers(): Promise<any[]> {
+  if (pool && pool.connected) {
+    try {
+      const result = await pool.request().query('SELECT id, name, email, [role], passwordHash, tenantId FROM dbo.Users ORDER BY name ASC');
+      return result.recordset;
+    } catch (err) {
+      console.error('[DB] Erro ao buscar usuários no Azure SQL, lendo do arquivo local:', err);
+    }
+  }
+  const fileData = loadFromFile();
+  return fileData.users;
+}
+
+export async function saveUser(user: any): Promise<any> {
+  const fileData = loadFromFile();
+  const existingIdx = fileData.users.findIndex((u: any) => u.id === user.id || u.email === user.email);
+  if (existingIdx >= 0) {
+    fileData.users[existingIdx] = user;
+  } else {
+    fileData.users.push(user);
+  }
+  saveToFile(fileData);
+
+  if (pool && pool.connected) {
+    try {
+      const req = pool.request();
+      req.input('id', sql.VarChar(50), user.id);
+      req.input('name', sql.NVarChar(150), user.name);
+      req.input('email', sql.NVarChar(150), user.email);
+      req.input('role', sql.VarChar(50), user.role || 'SAC');
+      req.input('passwordHash', sql.VarChar(255), user.passwordHash || 'Dicompel!@#2026');
+      req.input('tenantId', sql.VarChar(50), user.tenantId || 'tenant_1');
+
+      await req.query(`
+        IF EXISTS (SELECT 1 FROM dbo.Users WHERE id = @id OR email = @email)
+        BEGIN
+          UPDATE dbo.Users
+          SET name = @name, email = @email, [role] = @role, passwordHash = @passwordHash, tenantId = @tenantId
+          WHERE id = @id OR email = @email;
+        END
+        ELSE
+        BEGIN
+          INSERT INTO dbo.Users (id, name, email, [role], passwordHash, tenantId)
+          VALUES (@id, @name, @email, @role, @passwordHash, @tenantId);
+        END
+      `);
+      console.log(`[DB] Usuário ${user.email} gravado no Azure SQL com sucesso.`);
+    } catch (err) {
+      console.error(`[DB] Erro ao gravar usuário ${user.email} no Azure SQL:`, err);
+    }
+  }
+
+  return user;
+}
+
+export async function deleteUser(id: string): Promise<boolean> {
+  const fileData = loadFromFile();
+  fileData.users = fileData.users.filter((u: any) => u.id !== id);
+  saveToFile(fileData);
+
+  if (pool && pool.connected) {
+    try {
+      const req = pool.request();
+      req.input('id', sql.VarChar(50), id);
+      await req.query('DELETE FROM dbo.Users WHERE id = @id');
+      console.log(`[DB] Usuário ${id} deletado no Azure SQL.`);
+    } catch (err) {
+      console.error(`[DB] Erro ao deletar usuário ${id} no Azure SQL:`, err);
+    }
+  }
+  return true;
+}

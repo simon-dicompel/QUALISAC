@@ -36,15 +36,6 @@ on:
         required: true
         type: string
 
-  # Disparo automático se houver alteração nos scripts SQL no branch main
-  push:
-    branches:
-      - main
-    paths:
-      - 'azure_sql_setup.sql'
-      - 'azure-sql-schema.sql'
-      - 'azure_setup.sql'
-
 jobs:
   deploy-database:
     name: Criar e Configurar Banco Azure
