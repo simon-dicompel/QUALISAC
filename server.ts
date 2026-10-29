@@ -37,20 +37,20 @@ app.use(express.json({ limit: '10mb' }));
 
 // 1. Health & SMTP Status Endpoint
 app.get('/api/smtp/status', (req, res) => {
-  const smtpHost = process.env.SMTP_HOST || '';
+  const smtpHost = process.env.SMTP_HOST || 'smtp.office365.com';
   const smtpPort = process.env.SMTP_PORT || '587';
   const smtpUser = process.env.SMTP_USER || 'sac@dicompel.com.br';
-  const smtpPass = process.env.SMTP_PASS || '';
+  const smtpPass = process.env.SMTP_PASS || 'jfhplgvrmqjbmmfz';
   const isConfigured = Boolean(smtpHost && smtpPass);
 
   res.json({
     configured: isConfigured,
-    host: smtpHost || 'Não configurado',
+    host: smtpHost,
     port: smtpPort,
     user: smtpUser,
     from: process.env.SMTP_FROM || `Simon Dicompel SAC <${smtpUser}>`,
     message: isConfigured
-      ? `Servidor SMTP configurado para envio real via ${smtpHost}.`
+      ? `Servidor SMTP configurado para envio real via ${smtpHost} (${smtpUser}).`
       : 'Credenciais SMTP ainda não definidas nas variáveis de ambiente (.env).'
   });
 });
@@ -66,10 +66,10 @@ app.post('/api/send-email', async (req, res) => {
     });
   }
 
-  const smtpHost = process.env.SMTP_HOST;
+  const smtpHost = process.env.SMTP_HOST || 'smtp.office365.com';
   const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
   const smtpUser = process.env.SMTP_USER || 'sac@dicompel.com.br';
-  const smtpPass = process.env.SMTP_PASS;
+  const smtpPass = process.env.SMTP_PASS || 'jfhplgvrmqjbmmfz';
   const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
   const smtpFrom = process.env.SMTP_FROM || `Simon Dicompel SAC <${smtpUser}>`;
 
