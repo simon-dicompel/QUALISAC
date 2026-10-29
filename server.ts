@@ -17,6 +17,7 @@ import {
   getAllUsers,
   saveUser,
   deleteUser,
+  authenticateUser,
   wipeSampleData
 } from './src/server/database.js';
 
@@ -401,6 +402,26 @@ app.delete('/api/users/:id', async (req, res) => {
     res.json({ success: true });
   } catch (err: any) {
     console.error('[API] Erro ao excluir usuário:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Authentication Endpoint (Direct against Azure SQL & Local Backup)
+app.post('/api/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, error: 'Email e senha são obrigatórios.' });
+    }
+
+    const user = await authenticateUser(email, password);
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Email de acesso ou senha incorretos.' });
+    }
+
+    res.json({ success: true, user });
+  } catch (err: any) {
+    console.error('[API] Erro no login:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });

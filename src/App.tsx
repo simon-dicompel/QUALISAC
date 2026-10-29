@@ -52,36 +52,17 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  // Prerecorded clean defaults for testing
-  const DEFAULT_TEST_TENANT: Tenant = INITIAL_TENANTS[0];
+  // Administrador padrão Simon Dicompel
+  const PROD_ADMIN_DEFAULT: User = {
+    id: 'user_dicompel_admin',
+    name: 'Administrador Dicompel',
+    email: 'admin@dicompel.com.br',
+    role: 'ADMIN',
+    passwordHash: 'Dicompel!@#2026',
+    tenantId: 'tenant_1',
+  };
 
-  const DEFAULT_TEST_USER: User = INITIAL_USERS[0];
-
-  // Limpeza e migração para produção: Mantém exclusivamente o Administrador Dicompel
-  React.useEffect(() => {
-    const isProdWiped = localStorage.getItem('q_prod_dicompel_release_v1');
-    if (!isProdWiped) {
-      const prodAdmin: User = {
-        id: 'user_dicompel_admin',
-        name: 'Administrador Dicompel',
-        email: 'admin@dicompel.com.br',
-        role: 'ADMIN',
-        passwordHash: 'Dicompel!@#2026',
-        tenantId: 'tenant_1',
-      };
-
-      localStorage.setItem('q_users', JSON.stringify([prodAdmin]));
-      localStorage.removeItem('q_currentUser'); // Usuário inicia na tela de login
-      localStorage.setItem('q_is_production_mode', 'true');
-      localStorage.setItem('q_prod_dicompel_release_v1', 'true');
-
-      // Atualiza o estado da aplicação
-      setUsers([prodAdmin]);
-      setCurrentUser(null);
-    }
-  }, []);
-
-  // --- 1. Persistent Database Engine (Dual-layer: Server/Azure SQL + LocalStorage) ---
+  // --- 1. Persistent Database Engine (Dual-layer: Azure SQL + Local Cache) ---
   const [tenants, setTenants] = useState<Tenant[]>(() => {
     const saved = localStorage.getItem('q_tenants');
     return saved ? JSON.parse(saved) : INITIAL_TENANTS;
@@ -89,7 +70,13 @@ export default function App() {
 
   const [users, setUsers] = useState<User[]>(() => {
     const saved = localStorage.getItem('q_users');
-    return saved ? JSON.parse(saved) : INITIAL_USERS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {}
+    }
+    return [PROD_ADMIN_DEFAULT];
   });
 
   const [tickets, setTickets] = useState<Ticket[]>(() => {
@@ -97,17 +84,8 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Rejeita chamados de amostra residuais para manter a base limpa
-          const clean = parsed.filter((t: any) => 
-            !t.id?.startsWith('SAC-0001') && 
-            !t.id?.startsWith('DEV-0001') &&
-            t.customerName !== 'Construtora Horizonte Ltda' &&
-            t.productCode !== 'SIM-19011'
-          );
-          return clean;
-        }
-      } catch (e) {}
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
     }
     return [];
   });
@@ -140,17 +118,8 @@ export default function App() {
     if (saved !== null) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Rejeita produtos de amostra residuais para manter a base limpa
-          const clean = parsed.filter((p: any) => 
-            p.code !== 'SIM-19011' && 
-            p.code !== 'SIM-19022' && 
-            p.code !== 'SIM-20033' &&
-            p.code !== 'DIC-1001'
-          );
-          return clean;
-        }
-      } catch (e) {}
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
     }
     return [];
   });
@@ -169,18 +138,8 @@ export default function App() {
     message: 'Carregando status do banco...'
   });
 
-  // Efeito de sincronização com o banco de dados no carregamento da aplicação
+  // Efeito de sincronização com o banco de dados (Azure SQL / Servidor)
   useEffect(() => {
-    // 1. Limpeza garantida de dados de exemplo em navegadores que tinham cache antigo
-    const isWipedV4 = localStorage.getItem('q_prod_dicompel_clean_v4');
-    if (!isWipedV4) {
-      localStorage.removeItem('q_tickets');
-      localStorage.removeItem('q_products');
-      localStorage.setItem('q_prod_dicompel_clean_v4', 'true');
-      fetch('/api/database/wipe-samples', { method: 'POST' }).catch(() => {});
-    }
-
-    // 2. Carrega todos os dados gravados no servidor / Azure SQL
     fetch('/api/data')
       .then(async (res) => {
         if (!res.ok) return null;
@@ -191,24 +150,12 @@ export default function App() {
       .then((data) => {
         if (data && data.success) {
           if (Array.isArray(data.tickets)) {
-            const cleanTickets = data.tickets.filter((t: any) => 
-              !t.id?.startsWith('SAC-0001') && 
-              !t.id?.startsWith('DEV-0001') &&
-              t.customerName !== 'Construtora Horizonte Ltda' &&
-              t.productCode !== 'SIM-19011'
-            );
-            setTickets(cleanTickets);
-            localStorage.setItem('q_tickets', JSON.stringify(cleanTickets));
+            setTickets(data.tickets);
+            localStorage.setItem('q_tickets', JSON.stringify(data.tickets));
           }
           if (Array.isArray(data.products)) {
-            const cleanProducts = data.products.filter((p: any) => 
-              p.code !== 'SIM-19011' && 
-              p.code !== 'SIM-19022' && 
-              p.code !== 'SIM-20033' &&
-              p.code !== 'DIC-1001'
-            );
-            setProducts(cleanProducts);
-            localStorage.setItem('q_products', JSON.stringify(cleanProducts));
+            setProducts(data.products);
+            localStorage.setItem('q_products', JSON.stringify(data.products));
           }
           if (Array.isArray(data.users) && data.users.length > 0) {
             setUsers(data.users);
@@ -392,33 +339,83 @@ export default function App() {
 
   // --- 4. Authentic workflows ---
   
-  // A. Log in
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  // A. Log in (Autentica diretamente no Azure SQL / Servidor e cache resiliente)
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
+    setIsLoggingIn(true);
 
-    const found = users.find(
-      (u) => 
-        u.email.toLowerCase().trim() === loginEmail.toLowerCase().trim() && 
-        u.passwordHash === loginPassword
-    );
+    const emailTrim = loginEmail.toLowerCase().trim();
+    const passTrim = loginPassword.trim();
 
-    if (found) {
-      setCurrentUser(found);
-      const userTenant = tenants.find((t) => t.id === found.tenantId);
-      if (userTenant) {
-        setActiveTenant(userTenant);
+    try {
+      // 1. Tenta autenticação direta na API (/api/login -> Azure SQL)
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailTrim, password: passTrim })
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data && data.success && data.user) {
+          const authenticatedUser: User = data.user;
+          setCurrentUser(authenticatedUser);
+          localStorage.setItem('q_currentUser', JSON.stringify(authenticatedUser));
+          
+          setUsers((prev) => {
+            const exists = prev.some((u) => u.id === authenticatedUser.id || u.email.toLowerCase() === authenticatedUser.email.toLowerCase());
+            const updated = exists 
+              ? prev.map((u) => (u.id === authenticatedUser.id || u.email.toLowerCase() === authenticatedUser.email.toLowerCase() ? authenticatedUser : u))
+              : [...prev, authenticatedUser];
+            localStorage.setItem('q_users', JSON.stringify(updated));
+            return updated;
+          });
+
+          const userTenant = tenants.find((t) => t.id === authenticatedUser.tenantId);
+          if (userTenant) {
+            setActiveTenant(userTenant);
+          }
+          setLoginEmail('');
+          setLoginPassword('');
+          setIsLoggingIn(false);
+          return;
+        }
       }
-      setLoginEmail('');
-      setLoginPassword('');
-    } else {
-      setLoginError('Email de acesso ou senha incorretos. Por favor, verifique suas credenciais corporativas.');
+
+      // 2. Fallback de contingência local se o servidor estiver temporariamente indisponível
+      const found = users.find(
+        (u) => 
+          u.email.toLowerCase().trim() === emailTrim && 
+          u.passwordHash === passTrim
+      );
+
+      if (found) {
+        setCurrentUser(found);
+        localStorage.setItem('q_currentUser', JSON.stringify(found));
+        const userTenant = tenants.find((t) => t.id === found.tenantId);
+        if (userTenant) {
+          setActiveTenant(userTenant);
+        }
+        setLoginEmail('');
+        setLoginPassword('');
+      } else {
+        setLoginError('Email de acesso ou senha incorretos. Por favor, verifique suas credenciais corporativas.');
+      }
+    } catch (err) {
+      console.error('[Login] Erro ao autenticar:', err);
+      setLoginError('Falha ao autenticar. Verifique sua conexão e tente novamente.');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
   // B. Close Session
   const handleLogout = () => {
     setCurrentUser(null);
+    localStorage.removeItem('q_currentUser');
     setSelectedTicketId(null);
   };
 
@@ -1270,9 +1267,12 @@ export default function App() {
               <button
                 id="login-submit-btn"
                 type="submit"
-                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all cursor-pointer shadow-lg shadow-blue-600/10"
+                disabled={isLoggingIn}
+                className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-xl text-xs font-bold uppercase tracking-wider text-white transition-all cursor-pointer shadow-lg shadow-blue-600/10 ${
+                  isLoggingIn ? 'bg-blue-800 opacity-70 cursor-wait' : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                }`}
               >
-                Autenticar no Sistema
+                {isLoggingIn ? 'Autenticando no Azure SQL...' : 'Autenticar no Sistema'}
               </button>
             </form>
 

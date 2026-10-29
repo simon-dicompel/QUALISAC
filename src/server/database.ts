@@ -105,7 +105,7 @@ function getSqlConfig(): sql.config | null {
   const server = host.includes('.') ? host : `${host}.database.windows.net`;
   const database = process.env.AZURE_DB_NAME || 'qualisac_db';
   const user = process.env.AZURE_DB_USER || 'qualisacadmin';
-  const password = process.env.AZURE_DB_PASSWORD || '';
+  const password = process.env.AZURE_DB_PASSWORD || 'Dicompel#Sql2026!';
   const port = parseInt(process.env.AZURE_DB_PORT || '1433', 10);
 
   if (!password || password.trim() === '') {
@@ -120,7 +120,7 @@ function getSqlConfig(): sql.config | null {
     port,
     options: {
       encrypt: process.env.AZURE_DB_SSL !== 'false', // Required for Azure SQL (true)
-      trustServerCertificate: process.env.AZURE_DB_TRUST_SERVER_CERT === 'true' || false,
+      trustServerCertificate: true,
       connectTimeout: 10000,
       requestTimeout: 15000
     },
@@ -539,4 +539,38 @@ export async function deleteUser(id: string): Promise<boolean> {
     }
   }
   return true;
+}
+
+export async function authenticateUser(email: string, password: string): Promise<any | null> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (pool && pool.connected) {
+    try {
+      const req = pool.request();
+      req.input('email', sql.NVarChar(150), cleanEmail);
+      req.input('password', sql.VarChar(255), password);
+      const res = await req.query(
+        'SELECT id, name, email, [role], tenantId FROM dbo.Users WHERE LOWER(email) = LOWER(@email) AND passwordHash = @password'
+      );
+      if (res.recordset.length > 0) {
+        return res.recordset[0];
+      }
+    } catch (err) {
+      console.error('[DB] Erro ao autenticar no Azure SQL, tentando dados locais:', err);
+    }
+  }
+
+  const fileData = loadFromFile();
+  const found = fileData.users.find(
+    (u: any) => u.email.toLowerCase() === cleanEmail && u.passwordHash === password
+  );
+  if (found) {
+    return {
+      id: found.id,
+      name: found.name,
+      email: found.email,
+      role: found.role,
+      tenantId: found.tenantId
+    };
+  }
+  return null;
 }

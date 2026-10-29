@@ -9,7 +9,7 @@ let activeConfig = {
   port: parseInt(process.env.AZURE_DB_PORT || '1433', 10),
   database: process.env.AZURE_DB_NAME || 'qualisac_db',
   user: process.env.AZURE_DB_USER || 'qualisacadmin',
-  password: process.env.AZURE_DB_PASSWORD || '',
+  password: process.env.AZURE_DB_PASSWORD || 'Dicompel#Sql2026!',
   ssl: process.env.AZURE_DB_SSL !== 'false'
 };
 
@@ -20,8 +20,9 @@ let isConnecting = false;
 function buildSqlConfig(custom?: Partial<typeof activeConfig>): sql.config | null {
   const cfg = { ...activeConfig, ...custom };
   const host = cfg.host.includes('.') ? cfg.host : `${cfg.host}.database.windows.net`;
+  const password = cfg.password || process.env.AZURE_DB_PASSWORD || 'Dicompel#Sql2026!';
 
-  if (!cfg.password || cfg.password.trim() === '') {
+  if (!password || password.trim() === '') {
     return null;
   }
 
@@ -29,11 +30,11 @@ function buildSqlConfig(custom?: Partial<typeof activeConfig>): sql.config | nul
     server: host,
     database: cfg.database,
     user: cfg.user,
-    password: cfg.password,
+    password: password,
     port: cfg.port,
     options: {
       encrypt: cfg.ssl,
-      trustServerCertificate: process.env.AZURE_DB_TRUST_SERVER_CERT === 'true' || false,
+      trustServerCertificate: true,
       connectTimeout: 8000,
       requestTimeout: 15000,
     },
@@ -449,6 +450,66 @@ app.http('users-id', {
     }
 
     return jsonResponse({ success: true });
+  }
+});
+
+// =========================================================================
+// 7.1 POST /api/login - Authentication
+// =========================================================================
+app.http('login', {
+  methods: ['POST'],
+  route: 'login',
+  authLevel: 'anonymous',
+  handler: async (req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+    try {
+      const body: any = await req.json();
+      const { email, password } = body || {};
+
+      if (!email || !password) {
+        return jsonResponse({ success: false, error: 'Email e senha são obrigatórios.' }, 400);
+      }
+
+      const cleanEmail = String(email).trim().toLowerCase();
+      const p = await getPool();
+
+      if (p && p.connected) {
+        try {
+          const r = p.request();
+          r.input('email', sql.NVarChar(150), cleanEmail);
+          r.input('password', sql.VarChar(255), String(password));
+          const res = await r.query(
+            'SELECT id, name, email, [role], tenantId FROM dbo.Users WHERE LOWER(email) = LOWER(@email) AND passwordHash = @password'
+          );
+          if (res.recordset.length > 0) {
+            const u = res.recordset[0];
+            return jsonResponse({ success: true, user: u });
+          }
+        } catch (dbErr: any) {
+          context.error('[login] Erro no Azure SQL:', dbErr.message);
+        }
+      }
+
+      // Fallback: check in-memory users
+      const found = memoryUsers.find(
+        (u: any) => u.email.toLowerCase() === cleanEmail && u.passwordHash === password
+      );
+      if (found) {
+        return jsonResponse({
+          success: true,
+          user: {
+            id: found.id,
+            name: found.name,
+            email: found.email,
+            role: found.role,
+            tenantId: found.tenantId
+          }
+        });
+      }
+
+      return jsonResponse({ success: false, error: 'Email de acesso ou senha incorretos.' }, 401);
+    } catch (err: any) {
+      return jsonResponse({ success: false, error: err.message }, 500);
+    }
   }
 });
 
