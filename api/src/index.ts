@@ -1,6 +1,7 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
 import sql from 'mssql';
 import net from 'net';
+import nodemailer from 'nodemailer';
 
 // Dynamic runtime configuration cache (populated from env and can be updated via /api/azure/config)
 let activeConfig = {
@@ -695,5 +696,148 @@ app.http('database-wipe-samples', {
       success: true,
       message: 'Base limpa com sucesso para início de produção.'
     });
+  }
+});
+
+// =========================================================================
+// 13. GET /api/smtp/status
+// =========================================================================
+app.http('smtp-status', {
+  methods: ['GET'],
+  route: 'smtp/status',
+  authLevel: 'anonymous',
+  handler: async (req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+    const smtpHost = process.env.SMTP_HOST || '';
+    const smtpPort = process.env.SMTP_PORT || '587';
+    const smtpUser = process.env.SMTP_USER || 'sac@dicompel.com.br';
+    const smtpPass = process.env.SMTP_PASS || '';
+    const isConfigured = Boolean(smtpHost && smtpPass);
+
+    return jsonResponse({
+      configured: isConfigured,
+      host: smtpHost || 'Não configurado',
+      port: smtpPort,
+      user: smtpUser,
+      from: process.env.SMTP_FROM || `Simon Dicompel SAC <${smtpUser}>`,
+      message: isConfigured
+        ? `Servidor SMTP configurado para envio real via ${smtpHost}.`
+        : 'Credenciais SMTP ainda não definidas nas variáveis de ambiente do Azure.'
+    });
+  }
+});
+
+// =========================================================================
+// 14. POST /api/send-email
+// =========================================================================
+app.http('send-email', {
+  methods: ['POST'],
+  route: 'send-email',
+  authLevel: 'anonymous',
+  handler: async (req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+    try {
+      const body: any = await req.json();
+      const { to, cc, subject, body: emailBody, ticketId } = body;
+
+      if (!to || !subject || !emailBody) {
+        return jsonResponse({
+          success: false,
+          error: 'Campos obrigatórios ausentes: "to", "subject" e "body" são requeridos.'
+        }, 400);
+      }
+
+      const smtpHost = process.env.SMTP_HOST;
+      const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
+      const smtpUser = process.env.SMTP_USER || 'sac@dicompel.com.br';
+      const smtpPass = process.env.SMTP_PASS;
+      const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+      const smtpFrom = process.env.SMTP_FROM || `Simon Dicompel SAC <${smtpUser}>`;
+
+      let ccList: string[] = [];
+      if (Array.isArray(cc)) {
+        ccList = cc.filter(c => typeof c === 'string' && c.trim().length > 0);
+      } else if (typeof cc === 'string' && cc.trim().length > 0) {
+        ccList = [cc.trim()];
+      }
+
+      if (!smtpHost || !smtpPass) {
+        return jsonResponse({
+          success: false,
+          status: 'NEEDS_CONFIGURATION',
+          message: 'O e-mail foi registrado no sistema, porém o servidor SMTP corporativo (host/senha) de sac@dicompel.com.br ainda não foi configurado nas variáveis de ambiente.',
+          details: {
+            configured: false,
+            recommendedSender: smtpUser,
+            to,
+            cc: ccList,
+            subject
+          }
+        });
+      }
+
+      const transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpSecure,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+        tls: {
+          rejectUnauthorized: false
+        }
+      });
+
+      const info = await transporter.sendMail({
+        from: smtpFrom,
+        to,
+        cc: ccList.length > 0 ? ccList.join(', ') : undefined,
+        subject,
+        text: emailBody,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+          </head>
+          <body style="margin: 0; padding: 20px; background-color: #f1f5f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+            <div style="max-width: 650px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+              <div style="background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%); padding: 24px; color: #ffffff;">
+                <h1 style="margin: 0; font-size: 20px; font-weight: 800; letter-spacing: 0.5px;">SIMON DICOMPEL</h1>
+                <p style="margin: 4px 0 0 0; font-size: 13px; color: #93c5fd; font-weight: 500;">Sistema de SAC & Gestão da Qualidade ISO 9001</p>
+              </div>
+              <div style="padding: 24px 28px;">
+                <div style="display: inline-block; background-color: #eff6ff; color: #1d4ed8; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; margin-bottom: 12px; border: 1px solid #dbeafe;">
+                  ${ticketId ? `CHAMADO: ${ticketId}` : 'NOTIFICAÇÃO OPERACIONAL'}
+                </div>
+                <h2 style="margin: 0 0 16px 0; font-size: 16px; color: #0f172a; line-height: 1.4;">${subject}</h2>
+                <div style="background-color: #f8fafc; border-left: 4px solid #2563eb; padding: 16px; border-radius: 6px; font-size: 13px; color: #334155; line-height: 1.6; white-space: pre-wrap; font-family: monospace;">
+${emailBody}
+                </div>
+                <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #64748b; line-height: 1.5;">
+                  <p style="margin: 0;"><strong>Atendimento Simon Dicompel SAC</strong><br>E-mail oficial: <a href="mailto:${smtpUser}" style="color: #2563eb; text-decoration: none;">${smtpUser}</a></p>
+                  <p style="margin: 6px 0 0 0; font-size: 10px; color: #94a3b8;">Mensagem automática em conformidade com o SGQ ISO 9001.</p>
+                </div>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+      });
+
+      return jsonResponse({
+        success: true,
+        message: `E-mail enviado com sucesso via servidor SMTP (${smtpHost})!`,
+        messageId: info.messageId,
+        recipient: to,
+        cc: ccList,
+        subject
+      });
+    } catch (err: any) {
+      context.error('[send-email] Erro ao disparar e-mail:', err.message);
+      return jsonResponse({
+        success: false,
+        error: err.message || 'Falha ao autenticar ou enviar via SMTP.'
+      }, 500);
+    }
   }
 });
