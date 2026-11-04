@@ -20,6 +20,7 @@ import { DashboardView } from './components/DashboardView';
 import { TicketList } from './components/TicketList';
 import { TicketDetails } from './components/TicketDetails';
 import { NewTicketModal } from './components/NewTicketModal';
+import { EditTicketModal } from './components/EditTicketModal';
 import { AdminConfigView } from './components/AdminConfigView';
 import { SmtpConfigModal } from './components/SmtpConfigModal';
 import { 
@@ -202,6 +203,9 @@ export default function App() {
   const [isSpecialTicketMode, setIsSpecialTicketMode] = useState(false);
   const [modalTicketType, setModalTicketType] = useState<'SAC' | 'DEVOLUÇÃO' | 'NÃO CONFORMIDADE'>('SAC');
   const [isSmtpModalOpen, setIsSmtpModalOpen] = useState(false);
+
+  // Edit ticket modal state
+  const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
 
   // Login credentials state
   const [loginEmail, setLoginEmail] = useState('');
@@ -681,6 +685,12 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedTicket),
     }).catch((err) => console.error(`[API] Erro ao sincronizar chamado ${updatedTicket.id} no banco:`, err));
+  };
+
+  // C.1 Salvar alterações de chamado editado (SAC / Admin)
+  const handleSaveEditedTicket = (updatedTicket: Ticket) => {
+    setTickets((prev) => prev.map((t) => (t.id === updatedTicket.id ? updatedTicket : t)));
+    persistTicketUpdate(updatedTicket);
   };
 
   // D. Update Status & Log Action + Dispara E-mails Automáticos
@@ -1547,6 +1557,9 @@ export default function App() {
                   sendAutomatedTicketEmail(ticketObj, 'atualizacao_geral', subject, message)
                 }
                 onOpenSmtpConfig={() => setIsSmtpModalOpen(true)}
+                onOpenEditModal={() => setEditingTicket(activeTicket)}
+                products={products}
+                issueTypes={issueTypes}
               />
             ) : (
               /* Toggle components resting in normal tabs router state */
@@ -1587,6 +1600,8 @@ export default function App() {
                     onClearGlobalSearch={() => setGlobalSearchTerm('')}
                     selectedStatusFilter={dashboardStatusFilter}
                     onStatusFilterChange={setDashboardStatusFilter}
+                    currentUser={currentUser}
+                    onEditTicket={(ticket) => setEditingTicket(ticket)}
                   />
                 )}
 
@@ -1705,6 +1720,19 @@ export default function App() {
         <SmtpConfigModal
           isOpen={isSmtpModalOpen}
           onClose={() => setIsSmtpModalOpen(false)}
+        />
+      )}
+
+      {/* 7. Edit Ticket Modal (SAC & Admin com restrições por status) */}
+      {editingTicket && (
+        <EditTicketModal
+          isOpen={Boolean(editingTicket)}
+          onClose={() => setEditingTicket(null)}
+          ticket={editingTicket}
+          currentUser={currentUser}
+          products={products}
+          issueTypes={issueTypes}
+          onSave={handleSaveEditedTicket}
         />
       )}
 

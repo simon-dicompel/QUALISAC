@@ -1,24 +1,5 @@
 {
-  "tickets": [
-    {
-      "id": "SAC-0001",
-      "ticketType": "SAC",
-      "customerName": "Dicompel Teste",
-      "productCode": "SIM-1001",
-      "productName": "Tomada 2P+T 10A Simon 19 Branco",
-      "quantity": 2,
-      "status": "Aberto",
-      "description": "Teste de gravação no banco de dados Azure SQL",
-      "createdAt": "2026-10-29T14:30:00.000Z",
-      "updatedAt": "2026-10-29T14:30:00.000Z",
-      "userId": "user_1793283102478",
-      "userName": "Sabrina Aparecida",
-      "tenantId": "tenant_1",
-      "history": [],
-      "files": [],
-      "comments": []
-    }
-  ],
+  "tickets": [],
   "products": [
     {
       "code": "SIM-1001",
@@ -38,5 +19,5 @@
     }
   ],
   "issueTypes": [],
-  "updatedAt": "2026-10-29T14:28:07.582Z"
+  "updatedAt": "2026-11-04T17:00:35.087Z"
 }

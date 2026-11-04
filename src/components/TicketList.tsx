@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Ticket, IssueType, TicketStatus } from '../types';
+import { Ticket, IssueType, TicketStatus, User } from '../types';
 import { 
   Search, 
   Filter, 
@@ -15,7 +15,9 @@ import {
   FileText,
   X,
   ListTodo,
-  Sparkles
+  Sparkles,
+  Edit3,
+  Lock
 } from 'lucide-react';
 
 interface TicketListProps {
@@ -29,6 +31,8 @@ interface TicketListProps {
   onClearGlobalSearch?: () => void;
   selectedStatusFilter?: string;
   onStatusFilterChange?: (status: string) => void;
+  currentUser?: User;
+  onEditTicket?: (ticket: Ticket) => void;
 }
 
 export const TicketList: React.FC<TicketListProps> = ({
@@ -42,6 +46,8 @@ export const TicketList: React.FC<TicketListProps> = ({
   onClearGlobalSearch,
   selectedStatusFilter = 'all',
   onStatusFilterChange,
+  currentUser,
+  onEditTicket,
 }) => {
   // Filters State
   const [searchQuery, setSearchQuery] = useState('');
@@ -550,17 +556,56 @@ export const TicketList: React.FC<TicketListProps> = ({
                     {getStatusBadge(ticket.status)}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button
-                      id={`view-${ticket.id}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSelectTicket(ticket.id);
-                      }}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-lg border border-slate-200 hover:border-blue-200 transition-all cursor-pointer"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>Tratar</span>
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      {currentUser && onEditTicket && (() => {
+                        const isAdmin = currentUser.role === 'ADMIN';
+                        const isSAC = currentUser.role === 'SAC';
+                        const isBlockedByTratativa = ticket.status === 'Em tratativa';
+                        const canEdit = isAdmin || (isSAC && !isBlockedByTratativa && ticket.status !== 'Finalizado');
+
+                        if (!isAdmin && !isSAC) return null;
+
+                        return (
+                          <button
+                            id={`edit-${ticket.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (canEdit) {
+                                onEditTicket(ticket);
+                              } else if (isSAC && isBlockedByTratativa) {
+                                alert('Bloqueado: Quando o status estiver em "Em tratativa", o SAC não pode modificar o chamado. Apenas a equipe de Qualidade pode atuar no laudo de causa raiz e ações corretivas.');
+                              }
+                            }}
+                            disabled={!canEdit}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                              canEdit
+                                ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200'
+                                : 'bg-slate-100 text-slate-400 border-slate-200 opacity-50 cursor-not-allowed'
+                            }`}
+                            title={
+                              isSAC && isBlockedByTratativa
+                                ? 'Edição bloqueada para SAC: Chamado em tratativa'
+                                : 'Editar dados do cliente, incluir ou tirar produtos'
+                            }
+                          >
+                            {canEdit ? <Edit3 className="w-3.5 h-3.5 text-amber-700" /> : <Lock className="w-3.5 h-3.5 text-slate-400" />}
+                            <span>Editar</span>
+                          </button>
+                        );
+                      })()}
+
+                      <button
+                        id={`view-${ticket.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectTicket(ticket.id);
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-lg border border-slate-200 hover:border-blue-200 transition-all cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Tratar</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

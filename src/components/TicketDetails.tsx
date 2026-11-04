@@ -30,7 +30,9 @@ import {
   Clock,
   ExternalLink,
   Server,
-  AlertTriangle
+  AlertTriangle,
+  Edit3,
+  Lock
 } from 'lucide-react';
 
 interface TicketDetailsProps {
@@ -48,6 +50,9 @@ interface TicketDetailsProps {
   onUpdateObservers?: (ticketId: string, observers: string[], observerEmail?: string) => void;
   onSendManualNotification?: (ticket: Ticket, subject: string, message: string) => void;
   onOpenSmtpConfig?: () => void;
+  onOpenEditModal?: () => void;
+  products?: Product[];
+  issueTypes?: IssueTypeCategory[];
 }
 
 export const TicketDetails: React.FC<TicketDetailsProps> = ({
@@ -65,6 +70,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
   onUpdateObservers,
   onSendManualNotification,
   onOpenSmtpConfig,
+  onOpenEditModal,
 }) => {
   // Tabs for the right panel: "Analise de Qualidade", "Comentarios e Auditoria", "E-mails & Notificações"
   const [activeTab, setActiveTab] = useState<'qualidade' | 'interacoes' | 'emails'>('qualidade');
@@ -914,6 +920,48 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {/* Botão de Editar Chamado (SAC & Admin com trava de segurança em Tratativa) */}
+          {(() => {
+            const isAdmin = currentUser.role === 'ADMIN';
+            const isSAC = currentUser.role === 'SAC';
+            const isBlockedByTratativa = ticket.status === 'Em tratativa';
+            const canEdit = isAdmin || (isSAC && !isBlockedByTratativa && ticket.status !== 'Finalizado');
+
+            let tooltipText = 'Editar dados do cliente, incluir ou tirar produtos';
+            if (isSAC && isBlockedByTratativa) {
+              tooltipText = 'Edição bloqueada para SAC: Chamado em tratativa (somente Qualidade pode mexer no laudo/causa raiz)';
+            } else if (!isAdmin && !isSAC) {
+              tooltipText = 'Somente atendentes SAC e Administradores podem editar o chamado';
+            }
+
+            return (
+              <button
+                id="btn-edit-ticket-primary"
+                onClick={() => {
+                  if (canEdit) {
+                    onOpenEditModal?.();
+                  } else if (isSAC && isBlockedByTratativa) {
+                    alert('Bloqueado: Quando o status estiver em "Em tratativa", o SAC não pode modificar o chamado. Apenas a equipe de Qualidade pode atuar no laudo de causa raiz e ações corretivas.');
+                  }
+                }}
+                disabled={!canEdit}
+                className={`px-3.5 py-2 text-xs font-black rounded-xl shadow-md flex items-center gap-1.5 transition-all cursor-pointer ${
+                  canEdit
+                    ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-amber-500/25 hover:scale-[1.02]'
+                    : 'bg-slate-200 text-slate-400 border border-slate-300 shadow-none cursor-not-allowed opacity-60'
+                }`}
+                title={tooltipText}
+              >
+                {canEdit ? (
+                  <Edit3 className="w-4 h-4 text-slate-950" />
+                ) : (
+                  <Lock className="w-4 h-4 text-slate-400" />
+                )}
+                <span>Editar Chamado</span>
+              </button>
+            );
+          })()}
+
           {/* Botão de Exportar Laudo (Estilo PDF via CSS print com fotos, histórico e parecer) */}
           <button
             id="btn-export-laudo-primary"
@@ -1045,6 +1093,40 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 <span>Dados de Registro (SAC)</span>
               </h3>
               <div className="flex items-center gap-2">
+                {(() => {
+                  const isAdmin = currentUser.role === 'ADMIN';
+                  const isSAC = currentUser.role === 'SAC';
+                  const isBlockedByTratativa = ticket.status === 'Em tratativa';
+                  const canEdit = isAdmin || (isSAC && !isBlockedByTratativa && ticket.status !== 'Finalizado');
+
+                  return (
+                    <button
+                      id="btn-edit-ticket-card"
+                      onClick={() => {
+                        if (canEdit) {
+                          onOpenEditModal?.();
+                        } else if (isSAC && isBlockedByTratativa) {
+                          alert('Bloqueado: Quando o status estiver em "Em tratativa", o SAC não pode modificar o chamado. Apenas a equipe de Qualidade pode atuar no laudo de causa raiz e ações corretivas.');
+                        }
+                      }}
+                      disabled={!canEdit}
+                      className={`text-xs font-bold inline-flex items-center gap-1.5 py-1.5 px-3 rounded-lg shadow-sm transition-all cursor-pointer ${
+                        canEdit
+                          ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 hover:scale-[1.02]'
+                          : 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                      }`}
+                      title={
+                        isSAC && isBlockedByTratativa
+                          ? 'Edição bloqueada para SAC: Chamado em tratativa'
+                          : 'Editar dados do cliente, incluir ou tirar produtos'
+                      }
+                    >
+                      {canEdit ? <Edit3 className="w-3.5 h-3.5 text-slate-950" /> : <Lock className="w-3.5 h-3.5 text-slate-400" />}
+                      <span>Editar</span>
+                    </button>
+                  );
+                })()}
+
                 <button
                   id="print-ticket-report-btn"
                   onClick={handlePrintTicketReport}
