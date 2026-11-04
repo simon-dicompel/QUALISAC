@@ -8,6 +8,17 @@
     <meta property="og:title" content="QualiSAC - Simon Dicompel | SAC & Qualidade" />
     <meta property="og:description" content="Sistema de SAC e Qualidade integrado para registro de devoluções, tratamento de não conformidades." />
     <link rel="icon" type="image/png" href="/simon_dicompel_logo_clean.png" />
+    <script>
+      // Suprime o aviso benigno de WebSocket HMR fechado no ambiente de preview do Vite/AI Studio
+      window.addEventListener('unhandledrejection', function(event) {
+        if (event && event.reason && (
+          (typeof event.reason.message === 'string' && event.reason.message.includes('WebSocket closed without opened')) ||
+          (typeof event.reason === 'string' && event.reason.includes('WebSocket closed'))
+        )) {
+          event.preventDefault();
+        }
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>
