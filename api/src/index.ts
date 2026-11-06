@@ -771,7 +771,7 @@ app.http('smtp-status', {
     const smtpHost = process.env.SMTP_HOST || 'smtp.office365.com';
     const smtpPort = process.env.SMTP_PORT || '587';
     const smtpUser = process.env.SMTP_USER || 'sac@dicompel.com.br';
-    const smtpPass = process.env.SMTP_PASS || 'jfhplgvrmqjbmmfz';
+    const smtpPass = process.env.SMTP_PASS || '';
     const isConfigured = Boolean(smtpHost && smtpPass);
 
     return jsonResponse({
@@ -809,7 +809,7 @@ app.http('send-email', {
       const smtpHost = process.env.SMTP_HOST || 'smtp.office365.com';
       const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
       const smtpUser = process.env.SMTP_USER || 'sac@dicompel.com.br';
-      const smtpPass = process.env.SMTP_PASS || 'jfhplgvrmqjbmmfz';
+      const smtpPass = process.env.SMTP_PASS || '';
       const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
       const smtpFrom = process.env.SMTP_FROM || `Simon Dicompel SAC <${smtpUser}>`;
 
