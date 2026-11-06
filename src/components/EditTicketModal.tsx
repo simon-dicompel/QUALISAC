@@ -39,6 +39,15 @@ const BRAZILIAN_UFS = [
   'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
 ];
 
+const PRESET_ORIGINS = [
+  'Consumidor Final',
+  'Revenda / Distribuidor',
+  'Transportadora',
+  'Fábrica / Linha de Produção',
+  'Auditoria Interna / Qualidade',
+  'Assistência Técnica / Eletricista',
+];
+
 interface EditTicketModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -60,12 +69,11 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
 }) => {
   // Permissões de edição:
   // - ADMIN pode mexer no chamado todo em qualquer status.
-  // - SAC pode editar enquanto o status NÃO for 'Em tratativa', 'Resolvido' ou 'Finalizado'.
-  //   Em 'Em tratativa', apenas Qualidade/Admin podem mexer e somente na causa raiz/ações.
+  // - SAC pode editar chamado (inclusive em 'Em tratativa', conforme solicitado).
+  // - Apenas chamados 'Finalizado' são protegidos para não administradores.
   const isAdmin = currentUser.role === 'ADMIN';
   const isSAC = currentUser.role === 'SAC';
-  const isBlockedByTratativa = ticket.status === 'Em tratativa';
-  const canEdit = isAdmin || (isSAC && !isBlockedByTratativa && ticket.status !== 'Finalizado');
+  const canEdit = isAdmin || (isSAC && ticket.status !== 'Finalizado');
 
   // 1. Dados do Cliente
   const [customerName, setCustomerName] = useState(ticket.customerName || ticket.clientName || '');
@@ -73,6 +81,18 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
   const [firstContactDate, setFirstContactDate] = useState(ticket.firstContactDate || '');
   const [clientEmail, setClientEmail] = useState(ticket.clientEmail || '');
   const [invoiceNumber, setInvoiceNumber] = useState(ticket.invoiceNumber || '');
+  
+  // Origem da Ocorrência (Predefinições + Digitação Manual Livre)
+  const initialOrigin = ticket.occurrenceOrigin || 'Consumidor Final';
+  const [occurrenceOrigin, setOccurrenceOrigin] = useState(
+    PRESET_ORIGINS.includes(initialOrigin) ? initialOrigin : 'Outro'
+  );
+  const [customOccurrenceOrigin, setCustomOccurrenceOrigin] = useState(
+    PRESET_ORIGINS.includes(initialOrigin) ? '' : initialOrigin
+  );
+  const [isCustomOrigin, setIsCustomOrigin] = useState(
+    !PRESET_ORIGINS.includes(initialOrigin)
+  );
 
   // 2. Itens / Produtos Devolvidos
   const [items, setItems] = useState<TicketItem[]>(() => {
@@ -132,6 +152,17 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
       setFirstContactDate(ticket.firstContactDate || '');
       setClientEmail(ticket.clientEmail || '');
       setInvoiceNumber(ticket.invoiceNumber || '');
+      
+      const currentOrigin = ticket.occurrenceOrigin || 'Consumidor Final';
+      if (PRESET_ORIGINS.includes(currentOrigin)) {
+        setOccurrenceOrigin(currentOrigin);
+        setCustomOccurrenceOrigin('');
+        setIsCustomOrigin(false);
+      } else {
+        setOccurrenceOrigin('Outro');
+        setCustomOccurrenceOrigin(currentOrigin);
+        setIsCustomOrigin(true);
+      }
 
       if (ticket.items && ticket.items.length > 0) {
         setItems(JSON.parse(JSON.stringify(ticket.items)));
@@ -323,6 +354,15 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
       timestamp: now,
     };
 
+    const finalOrigin = (isCustomOrigin || occurrenceOrigin === 'Outro')
+      ? customOccurrenceOrigin.trim()
+      : occurrenceOrigin.trim();
+
+    if ((isCustomOrigin || occurrenceOrigin === 'Outro') && !finalOrigin) {
+      alert('Por favor, digite de onde vem a ocorrência.');
+      return;
+    }
+
     const updatedTicket: Ticket = {
       ...ticket,
       customerName: customerName.trim(),
@@ -330,6 +370,7 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
       consumer: customerName.trim(),
       resellerName: resellerName.trim() || undefined,
       reseller: resellerName.trim() || undefined,
+      occurrenceOrigin: finalOrigin || 'Consumidor Final',
       firstContactDate: firstContactDate || ticket.firstContactDate,
       clientEmail: clientEmail.trim() || undefined,
       invoiceNumber: invoiceNumber.trim() || undefined,
@@ -398,9 +439,8 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
           <div className="px-6 py-3 bg-amber-50 border-b border-amber-200 text-amber-900 text-xs flex items-center gap-2.5">
             <Lock className="w-4 h-4 text-amber-600 shrink-0" />
             <span>
-              <strong>Edição Bloqueada para o perfil SAC:</strong> O chamado está no status{' '}
-              <strong className="uppercase">"{ticket.status}"</strong>. Durante a tratativa, apenas a equipe de{' '}
-              <strong>Qualidade</strong> ou <strong>Administradores</strong> podem mexer no laudo técnico e ações corretivas.
+              <strong>Edição Bloqueada:</strong> O chamado está no status{' '}
+              <strong className="uppercase">"{ticket.status}"</strong>. Apenas administradores podem modificar chamados já finalizados.
             </span>
           </div>
         )}
@@ -487,6 +527,79 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
                   onChange={(e) => setFirstContactDate(e.target.value)}
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
                 />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Origem da Ocorrência
+                  </label>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isCustomOrigin) {
+                          setIsCustomOrigin(true);
+                          setCustomOccurrenceOrigin(occurrenceOrigin !== 'Outro' ? occurrenceOrigin : '');
+                        } else {
+                          setIsCustomOrigin(false);
+                        }
+                      }}
+                      className="text-[9.5px] text-blue-700 font-extrabold hover:text-blue-900 cursor-pointer bg-blue-100/70 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-250 transition-colors"
+                    >
+                      {isCustomOrigin ? '📋 Escolher da lista' : '✍️ Digitar manualmente'}
+                    </button>
+                  )}
+                </div>
+
+                {!isCustomOrigin ? (
+                  <select
+                    disabled={!canEdit}
+                    value={occurrenceOrigin}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setOccurrenceOrigin(val);
+                      if (val === 'Outro') {
+                        setIsCustomOrigin(true);
+                        setCustomOccurrenceOrigin('');
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
+                  >
+                    {PRESET_ORIGINS.map((orig) => (
+                      <option key={orig} value={orig}>{orig}</option>
+                    ))}
+                    <option value="Outro">✍️ Outro (digitar de onde vem a ocorrência...)</option>
+                  </select>
+                ) : (
+                  <div className="space-y-1 animate-in fade-in duration-150">
+                    <input
+                      type="text"
+                      disabled={!canEdit}
+                      required
+                      placeholder="Digite de onde vem a ocorrência (ex: Obra Predial, Representante...)"
+                      value={customOccurrenceOrigin}
+                      onChange={(e) => setCustomOccurrenceOrigin(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-blue-400 rounded-lg text-xs text-slate-900 font-bold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500 shadow-2xs"
+                      autoFocus
+                    />
+                    {canEdit && (
+                      <div className="flex items-center justify-between text-[10px] text-slate-500">
+                        <span className="text-blue-700 font-semibold">✍️ Digitação livre da origem</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCustomOrigin(false);
+                            setOccurrenceOrigin('Consumidor Final');
+                          }}
+                          className="text-slate-500 hover:text-blue-700 underline cursor-pointer"
+                        >
+                          Voltar para lista
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

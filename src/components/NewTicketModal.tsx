@@ -41,11 +41,21 @@ const BRAZILIAN_UFS = [
   'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
 ];
 
+export const PRESET_ORIGINS = [
+  'Consumidor Final',
+  'Revenda / Distribuidor',
+  'Transportadora',
+  'Fábrica / Linha de Produção',
+  'Auditoria Interna / Qualidade',
+  'Assistência Técnica / Eletricista',
+];
+
 interface NewTicketModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: {
     ticketType: 'SAC' | 'DEVOLUÇÃO' | 'NÃO CONFORMIDADE';
+    occurrenceOrigin?: string;
     customerName: string;
     resellerName?: string;
     firstContactDate: string;
@@ -101,6 +111,9 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   const [customerName, setCustomerName] = useState('');
   const [clientEmail, setClientEmail] = useState('');
   const [firstContactDate, setFirstContactDate] = useState(todayStr);
+  const [occurrenceOrigin, setOccurrenceOrigin] = useState('Consumidor Final');
+  const [customOccurrenceOrigin, setCustomOccurrenceOrigin] = useState('');
+  const [isCustomOrigin, setIsCustomOrigin] = useState(false);
 
   // E-mail para Notificações Adicionais e Observadores
   const [additionalObserverEmail, setAdditionalObserverEmail] = useState('');
@@ -158,6 +171,9 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
       setCustomerName('');
       setClientEmail('');
       setAdditionalObserverEmail('');
+      setOccurrenceOrigin(initialTicketType === 'DEVOLUÇÃO' ? 'Revenda / Distribuidor' : initialTicketType === 'NÃO CONFORMIDADE' ? 'Fábrica / Linha de Produção' : 'Consumidor Final');
+      setCustomOccurrenceOrigin('');
+      setIsCustomOrigin(false);
       setFirstContactDate(new Date().toISOString().split('T')[0]);
 
       const firstProd = products[0];
@@ -338,8 +354,18 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
       }
     }
 
+    const finalOrigin = (isCustomOrigin || occurrenceOrigin === 'Outro')
+      ? customOccurrenceOrigin.trim()
+      : occurrenceOrigin.trim();
+
+    if ((isCustomOrigin || occurrenceOrigin === 'Outro') && !finalOrigin) {
+      alert('Por favor, digite de onde vem a ocorrência.');
+      return;
+    }
+
     onSubmit({
       ticketType,
+      occurrenceOrigin: finalOrigin || 'Consumidor Final',
       // 1. Cliente & Notificações
       customerName: customerName.trim(),
       clientEmail: clientEmail.trim() || undefined,
@@ -618,6 +644,78 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                   className="w-full px-3 py-2 border border-slate-250 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
                   title="E-mail que receberá cópia de todas as atualizações e mudanças de status deste chamado"
                 />
+              </div>
+
+              {/* Origem da Ocorrência (Preenchimento SAC com opção de digitação livre) */}
+              <div className="md:col-span-4">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-800 uppercase flex items-center gap-1">
+                    <Layers className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Origem da Ocorrência</span>
+                    <span className="text-rose-500 font-bold">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isCustomOrigin) {
+                        setIsCustomOrigin(true);
+                        setCustomOccurrenceOrigin(occurrenceOrigin !== 'Outro' ? occurrenceOrigin : '');
+                      } else {
+                        setIsCustomOrigin(false);
+                      }
+                    }}
+                    className="text-[9.5px] text-blue-700 font-extrabold hover:text-blue-900 cursor-pointer bg-blue-100/70 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-250 transition-colors"
+                  >
+                    {isCustomOrigin ? '📋 Escolher da lista' : '✍️ Digitar manualmente'}
+                  </button>
+                </div>
+
+                {!isCustomOrigin ? (
+                  <select
+                    id="modal-occurrence-origin"
+                    value={occurrenceOrigin}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setOccurrenceOrigin(val);
+                      if (val === 'Outro') {
+                        setIsCustomOrigin(true);
+                        setCustomOccurrenceOrigin('');
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-blue-300 rounded-lg text-xs bg-blue-50/30 text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                  >
+                    {PRESET_ORIGINS.map((orig) => (
+                      <option key={orig} value={orig}>{orig}</option>
+                    ))}
+                    <option value="Outro">✍️ Outro (digitar de onde vem a ocorrência...)</option>
+                  </select>
+                ) : (
+                  <div className="space-y-1 animate-in fade-in duration-150">
+                    <input
+                      id="modal-custom-occurrence-origin"
+                      type="text"
+                      required
+                      placeholder="Digite de onde vem a ocorrência (ex: Obra Predial, Representante...)"
+                      value={customOccurrenceOrigin}
+                      onChange={(e) => setCustomOccurrenceOrigin(e.target.value)}
+                      className="w-full px-3 py-2 border border-blue-450 bg-white rounded-lg text-xs text-slate-900 font-bold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                      autoFocus
+                    />
+                    <div className="flex items-center justify-between text-[10px] text-slate-500">
+                      <span className="text-blue-700 font-semibold">✍️ Digitação livre da origem</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCustomOrigin(false);
+                          setOccurrenceOrigin('Consumidor Final');
+                        }}
+                        className="text-slate-500 hover:text-blue-700 underline cursor-pointer"
+                      >
+                        Voltar para lista
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Observadores e E-mails em Cópia (Acompanhamento & Interação) */}

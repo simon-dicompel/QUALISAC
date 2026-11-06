@@ -544,6 +544,7 @@ export default function App() {
   // C. Open Return/Non-Conformity Ticket
   const handleCreateTicket = (data: {
     ticketType?: 'SAC' | 'DEVOLUÇÃO' | 'NÃO CONFORMIDADE';
+    occurrenceOrigin?: string;
     customerName: string;
     resellerName?: string;
     firstContactDate: string;
@@ -592,6 +593,7 @@ export default function App() {
     const timestamp = new Date().toISOString();
     const sacDetails = [
       `Tipo: ${tType}`,
+      data.occurrenceOrigin ? `Origem: ${data.occurrenceOrigin}` : null,
       data.resellerName ? `Revenda: ${data.resellerName}` : null,
       data.customerName ? `Consumidor: ${data.customerName}` : null,
       data.productLine ? `Linha: ${data.productLine}` : null,
@@ -609,7 +611,7 @@ export default function App() {
       userId: currentUser.id,
       userName: currentUser.name,
       userRole: currentUser.role,
-      details: `${currentUser.name} registrou ocorrência [${tType}] de ${data.quantity} unidades (${data.items && data.items.length > 1 ? `${data.items.length} SKUs` : data.productName}) por motivo de ${data.issueType}${data.subCategory ? ` (${data.subCategory})` : ''}. Lote: ${data.batch || 'Não Informado'}${sacDetails ? ` | [Dados SAC] ${sacDetails}` : ''}`,
+      details: `${currentUser.name} registrou ocorrência [${tType}] de ${data.quantity} unidades (${data.items && data.items.length > 1 ? `${data.items.length} SKUs` : data.productName}) por motivo de ${data.issueType}${data.subCategory ? ` (${data.subCategory})` : ''}. Origem: ${data.occurrenceOrigin || 'Consumidor Final'}. Lote: ${data.batch || 'Não Informado'}${sacDetails ? ` | [Dados SAC] ${sacDetails}` : ''}`,
       timestamp,
     };
 
@@ -617,6 +619,7 @@ export default function App() {
       id: newId,
       tenantId: activeTenant.id,
       ticketType: tType,
+      occurrenceOrigin: data.occurrenceOrigin || 'Consumidor Final',
       customerName: data.customerName,
       resellerName: data.resellerName,
       clientName: data.customerName,

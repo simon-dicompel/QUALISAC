@@ -141,6 +141,9 @@ export interface Ticket {
   // Tipo de Chamado para Prefixo (SAC, DEV, NCO)
   ticketType?: 'SAC' | 'DEVOLUÇÃO' | 'NÃO CONFORMIDADE';
 
+  // Origem da Ocorrência (SAC / Devolução / Não Conformidade)
+  occurrenceOrigin?: string;
+
   // Controle de Ciclo de Vida do Chamado
   status: TicketStatus;
   createdAt: string;

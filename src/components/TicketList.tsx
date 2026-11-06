@@ -560,8 +560,7 @@ export const TicketList: React.FC<TicketListProps> = ({
                       {currentUser && onEditTicket && (() => {
                         const isAdmin = currentUser.role === 'ADMIN';
                         const isSAC = currentUser.role === 'SAC';
-                        const isBlockedByTratativa = ticket.status === 'Em tratativa';
-                        const canEdit = isAdmin || (isSAC && !isBlockedByTratativa && ticket.status !== 'Finalizado');
+                        const canEdit = isAdmin || (isSAC && ticket.status !== 'Finalizado');
 
                         if (!isAdmin && !isSAC) return null;
 
@@ -572,19 +571,17 @@ export const TicketList: React.FC<TicketListProps> = ({
                               e.stopPropagation();
                               if (canEdit) {
                                 onEditTicket(ticket);
-                              } else if (isSAC && isBlockedByTratativa) {
-                                alert('Bloqueado: Quando o status estiver em "Em tratativa", o SAC não pode modificar o chamado. Apenas a equipe de Qualidade pode atuar no laudo de causa raiz e ações corretivas.');
                               }
                             }}
                             disabled={!canEdit}
                             className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
                               canEdit
-                                ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200'
+                                ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200 shadow-2xs hover:scale-[1.02]'
                                 : 'bg-slate-100 text-slate-400 border-slate-200 opacity-50 cursor-not-allowed'
                             }`}
                             title={
-                              isSAC && isBlockedByTratativa
-                                ? 'Edição bloqueada para SAC: Chamado em tratativa'
+                              ticket.status === 'Finalizado' && !isAdmin
+                                ? 'Chamado finalizado (somente Administradores podem editar)'
                                 : 'Editar dados do cliente, incluir ou tirar produtos'
                             }
                           >

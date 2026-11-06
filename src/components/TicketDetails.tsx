@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Ticket, TicketStatus, User, TicketComment, QualityReport, IssueType, TicketReminder, SystemEmailLog } from '../types';
+import { Ticket, TicketStatus, User, TicketComment, QualityReport, IssueType, TicketReminder, SystemEmailLog, Product, IssueTypeCategory } from '../types';
 import { generateAIQualityReport } from '../utils/gemini';
 import { SimonDicompelLogo } from './SimonDicompelLogo';
 import { 
@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Sparkles,
   Download,
+  Eye,
   ListTodo,
   Check,
   X,
@@ -89,6 +90,10 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
   const [reminderDueDate, setReminderDueDate] = useState('');
   const [reminderPriority, setReminderPriority] = useState<'Baixa' | 'Média' | 'Alta'>('Média');
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+
+  // Pré-visualização segura de anexos (PDF e Imagens em Base64 / Blob ativo)
+  const [previewFile, setPreviewFile] = useState<any>(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
 
   // Auto-save & load comment to/from localStorage
   React.useEffect(() => {
@@ -357,16 +362,21 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
     alert('✅ Relatório técnico de análise de causa e ações corretivas atualizado no chamado!');
   };
 
-  // Handle real file attachments
+  // Handle real file attachments with persistent Base64 Data URL (immune to ERR_FILE_NOT_FOUND)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
     
     const file = fileList[0];
     const sizeStr = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
-    const objectUrl = URL.createObjectURL(file);
-    
-    onAddFile(ticket.id, file.name, sizeStr, file.type, objectUrl);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      onAddFile(ticket.id, file.name, sizeStr, file.type || 'application/octet-stream', dataUrl);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -387,9 +397,108 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
       const sizeStr = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
-      const objectUrl = URL.createObjectURL(file);
-      onAddFile(ticket.id, file.name, sizeStr, file.type, objectUrl);
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        onAddFile(ticket.id, file.name, sizeStr, file.type || 'application/octet-stream', dataUrl);
+      };
+      reader.readAsDataURL(file);
     }
+  };
+
+  // Safe file opening (avoids chrome blob ERR_FILE_NOT_FOUND and data URL navigation blocks)
+  const handleOpenFile = (file: { id: string; name: string; size: string; type: string; url: string }) => {
+    if (!file.url || file.url === '#') {
+      alert('Arquivo não disponível para visualização.');
+      return;
+    }
+
+    // If it's a legacy blob URL from an earlier session before this persistent fix
+    if (file.url.startsWith('blob:')) {
+      alert(
+        '⚠️ Este anexo foi vinculado anteriormente com um endereço temporário do navegador (blob) que já expirou da memória.\n\nPor favor, anexe o arquivo novamente nesta tela para que fique armazenado permanentemente no banco de dados e acessível por qualquer computador.'
+      );
+      return;
+    }
+
+    if (file.url.startsWith('data:')) {
+      try {
+        const parts = file.url.split(',');
+        const mimeMatch = parts[0].match(/:(.*?);/);
+        const mimeType = mimeMatch ? mimeMatch[1] : (file.type || 'application/octet-stream');
+        const bstr = atob(parts[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const freshBlob = new Blob([u8arr], { type: mimeType });
+        const freshBlobUrl = URL.createObjectURL(freshBlob);
+        setPreviewBlobUrl(freshBlobUrl);
+        setPreviewFile(file);
+      } catch (err) {
+        console.error('Erro ao converter arquivo base64:', err);
+        handleDownloadFile(file);
+      }
+      return;
+    }
+
+    window.open(file.url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleClosePreview = () => {
+    if (previewBlobUrl) {
+      URL.revokeObjectURL(previewBlobUrl);
+      setPreviewBlobUrl(null);
+    }
+    setPreviewFile(null);
+  };
+
+  const handleDownloadFile = (file: { id: string; name: string; size: string; type: string; url: string }) => {
+    if (!file.url || file.url === '#') return;
+
+    if (file.url.startsWith('blob:')) {
+      alert('⚠️ Este anexo usava link temporário de sessão anterior que já expirou. Por favor, reenvie o arquivo.');
+      return;
+    }
+
+    if (file.url.startsWith('data:')) {
+      try {
+        const parts = file.url.split(',');
+        const mimeMatch = parts[0].match(/:(.*?);/);
+        const mimeType = mimeMatch ? mimeMatch[1] : (file.type || 'application/octet-stream');
+        const bstr = atob(parts[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      } catch {
+        const a = document.createElement('a');
+        a.href = file.url;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      return;
+    }
+
+    const a = document.createElement('a');
+    a.href = file.url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const handleWhyChange = (index: number, val: string) => {
@@ -471,9 +580,10 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
               {/* Informações do Cliente */}
               <div>
                 <span className="font-bold text-[10px] text-slate-500 uppercase tracking-wider block mb-1">Informações do Cliente</span>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-2.5 rounded border border-slate-200">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs bg-slate-50 p-2.5 rounded border border-slate-200">
                   <p className="text-slate-700"><span className="font-bold text-slate-900">Consumidor Final:</span> {ticket.customerName || ticket.clientName || ticket.consumer}</p>
                   <p className="text-slate-700"><span className="font-bold text-slate-900">Nome da Revenda:</span> {ticket.resellerName || ticket.reseller || 'Não informada (Opcional)'}</p>
+                  <p className="text-slate-700"><span className="font-bold text-slate-900">Origem:</span> {ticket.occurrenceOrigin || 'Consumidor Final'}</p>
                   <p className="text-slate-700"><span className="font-bold text-slate-900">Data 1º Contato:</span> {ticket.firstContactDate ? new Date(ticket.firstContactDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Não informada'}</p>
                 </div>
               </div>
@@ -920,16 +1030,15 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* Botão de Editar Chamado (SAC & Admin com trava de segurança em Tratativa) */}
+          {/* Botão de Editar Chamado (SAC & Admin com permissão completa, inclusive em Tratativa) */}
           {(() => {
             const isAdmin = currentUser.role === 'ADMIN';
             const isSAC = currentUser.role === 'SAC';
-            const isBlockedByTratativa = ticket.status === 'Em tratativa';
-            const canEdit = isAdmin || (isSAC && !isBlockedByTratativa && ticket.status !== 'Finalizado');
+            const canEdit = isAdmin || (isSAC && ticket.status !== 'Finalizado');
 
             let tooltipText = 'Editar dados do cliente, incluir ou tirar produtos';
-            if (isSAC && isBlockedByTratativa) {
-              tooltipText = 'Edição bloqueada para SAC: Chamado em tratativa (somente Qualidade pode mexer no laudo/causa raiz)';
+            if (ticket.status === 'Finalizado' && !isAdmin) {
+              tooltipText = 'Chamado finalizado (somente Administradores podem editar)';
             } else if (!isAdmin && !isSAC) {
               tooltipText = 'Somente atendentes SAC e Administradores podem editar o chamado';
             }
@@ -940,8 +1049,6 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 onClick={() => {
                   if (canEdit) {
                     onOpenEditModal?.();
-                  } else if (isSAC && isBlockedByTratativa) {
-                    alert('Bloqueado: Quando o status estiver em "Em tratativa", o SAC não pode modificar o chamado. Apenas a equipe de Qualidade pode atuar no laudo de causa raiz e ações corretivas.');
                   }
                 }}
                 disabled={!canEdit}
@@ -1096,8 +1203,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 {(() => {
                   const isAdmin = currentUser.role === 'ADMIN';
                   const isSAC = currentUser.role === 'SAC';
-                  const isBlockedByTratativa = ticket.status === 'Em tratativa';
-                  const canEdit = isAdmin || (isSAC && !isBlockedByTratativa && ticket.status !== 'Finalizado');
+                  const canEdit = isAdmin || (isSAC && ticket.status !== 'Finalizado');
 
                   return (
                     <button
@@ -1105,8 +1211,6 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                       onClick={() => {
                         if (canEdit) {
                           onOpenEditModal?.();
-                        } else if (isSAC && isBlockedByTratativa) {
-                          alert('Bloqueado: Quando o status estiver em "Em tratativa", o SAC não pode modificar o chamado. Apenas a equipe de Qualidade pode atuar no laudo de causa raiz e ações corretivas.');
                         }
                       }}
                       disabled={!canEdit}
@@ -1116,8 +1220,8 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                           : 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60'
                       }`}
                       title={
-                        isSAC && isBlockedByTratativa
-                          ? 'Edição bloqueada para SAC: Chamado em tratativa'
+                        ticket.status === 'Finalizado' && !isAdmin
+                          ? 'Chamado finalizado (somente Administradores podem editar)'
                           : 'Editar dados do cliente, incluir ou tirar produtos'
                       }
                     >
@@ -1154,7 +1258,7 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">
                   1. Informações do Cliente
                 </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase">Consumidor Final</label>
                     <p className="font-bold text-slate-800 text-sm mt-0.5">
@@ -1165,6 +1269,14 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                     <label className="text-[10px] font-bold text-slate-400 uppercase">Nome da Revenda</label>
                     <p className="font-semibold text-slate-700 text-xs mt-0.5">
                       {ticket.resellerName || ticket.reseller || <span className="text-slate-400 italic font-normal">Não informada (Opcional)</span>}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Origem da Ocorrência</label>
+                    <p className="mt-0.5">
+                      <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        {ticket.occurrenceOrigin || 'Consumidor Final'}
+                      </span>
                     </p>
                   </div>
                   <div>
@@ -1456,18 +1568,30 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
                         </div>
                       </div>
                       
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         {file.url !== '#' && (
-                          <a
-                            href={file.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-semibold"
-                          >
-                            Abrir
-                          </a>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenFile(file)}
+                              className="p-1 px-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-md text-[11px] font-bold border border-blue-200 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                              title="Visualizar documento ou foto"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>Visualizar</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadFile(file)}
+                              className="p-1 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-[11px] font-semibold border border-slate-200 transition-colors cursor-pointer flex items-center gap-1"
+                              title="Baixar arquivo para o computador"
+                            >
+                              <Download className="w-3 h-3" />
+                              <span>Baixar</span>
+                            </button>
+                          </>
                         )}
-                        <span className="p-1.5 bg-slate-50 rounded text-slate-400 cursor-not-allowed text-xs">
+                        <span className="p-1 px-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded text-[10px] font-bold">
                           Salvo
                         </span>
                       </div>
@@ -2193,6 +2317,69 @@ export const TicketDetails: React.FC<TicketDetailsProps> = ({
         </div>
       </div>
     </div>
+    {/* Modal de Pré-visualização de Arquivos (PDF e Imagens) */}
+    {previewFile && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-150">
+        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden">
+          <div className="px-5 py-3.5 bg-gradient-to-r from-slate-900 to-blue-950 text-white flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="p-1.5 bg-blue-600/30 rounded-lg text-blue-300">
+                <FileText className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-white truncate">{previewFile.name}</h3>
+                <p className="text-[10px] text-slate-300 font-mono">{previewFile.size} &bull; {previewFile.type}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleDownloadFile(previewFile)}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Baixar Arquivo</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleClosePreview}
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+                title="Fechar visualizador"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+          
+          <div className="flex-1 bg-slate-100 p-2 sm:p-4 overflow-auto flex items-center justify-center">
+            {previewFile.type.startsWith('image/') || (typeof previewFile.url === 'string' && previewFile.url.startsWith('data:image/')) ? (
+              <img
+                src={previewFile.url}
+                alt={previewFile.name}
+                className="max-h-full max-w-full object-contain rounded-lg shadow-md"
+              />
+            ) : previewBlobUrl ? (
+              <iframe
+                src={previewBlobUrl}
+                title={previewFile.name}
+                className="w-full h-full rounded-lg border border-slate-300 bg-white shadow-inner"
+              />
+            ) : (
+              <div className="text-center p-8">
+                <p className="text-slate-600 font-medium mb-3">Pré-visualização do documento pronta para download.</p>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadFile(previewFile)}
+                  className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl"
+                >
+                  Baixar {previewFile.name}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
     </>
   );
 };
